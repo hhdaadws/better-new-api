@@ -173,7 +173,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       {
         text: t('错误日志'),
         itemKey: 'errorLog',
-        to: '/error-log',
+        to: '/console/error-log',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
