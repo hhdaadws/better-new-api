@@ -7,6 +7,11 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	// 渠道审核功能
+	HeaderAuditEnabled  bool   `json:"header_audit_enabled,omitempty"`   // 是否启用请求头审核
+	HeaderAuditRules    string `json:"header_audit_rules,omitempty"`     // 请求头审核规则，JSON格式：{"header-name": "regex-pattern"}
+	ContentAuditEnabled bool   `json:"content_audit_enabled,omitempty"`  // 是否启用内容审核
+	ContentAuditKeywords string `json:"content_audit_keywords,omitempty"` // 内容审核关键词，换行分隔
 }
 
 type VertexKeyType string

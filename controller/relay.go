@@ -166,6 +166,34 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 
 		addUsedChannel(c, channel.Id)
+
+		// 渠道审核检查
+		channelSetting, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
+		if channelSetting.HeaderAuditEnabled || channelSetting.ContentAuditEnabled {
+			auditResult := service.CheckChannelAudit(c.Request.Header, meta.CombineText, channelSetting)
+			if !auditResult.Passed {
+				// 记录详细原因到日志（仅管理员可见）
+				logger.LogWarn(c, fmt.Sprintf("channel audit failed: %s", auditResult.FailedReason))
+				// 返回给用户简洁的警告消息
+				userMessage := "[MikuCode] Your request has been blocked due to policy violation. Continued violations may result in account suspension."
+				if auditResult.FailedType == "header" {
+					newAPIError = types.NewError(
+						fmt.Errorf(userMessage),
+						types.ErrorCodeChannelHeaderAuditFailed,
+						types.ErrOptionWithSkipRetry(),
+					)
+				} else {
+					newAPIError = types.NewError(
+						fmt.Errorf(userMessage),
+						types.ErrorCodeChannelContentAuditFailed,
+						types.ErrOptionWithSkipRetry(),
+					)
+				}
+				newAPIError.StatusCode = http.StatusForbidden
+				return
+			}
+		}
+
 		requestBody, _ := common.GetRequestBody(c)
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 
