@@ -166,6 +166,36 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 
 		addUsedChannel(c, channel.Id)
+
+		// 渠道审核检查
+		channelSetting, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
+		if channelSetting.HeaderAuditEnabled || channelSetting.ContentAuditEnabled {
+			auditResult := service.CheckChannelAudit(c.Request.Header, meta.CombineText, channelSetting)
+			if !auditResult.Passed {
+				// 记录详细原因到日志（仅管理员可见）
+				logger.LogWarn(c, fmt.Sprintf("channel audit failed: %s", auditResult.FailedReason))
+				// 返回给用户简洁的警告消息
+				userMessage := "[MikuCode] Your request has been blocked due to policy violation. Continued violations may result in account suspension."
+				if auditResult.FailedType == "header" {
+					newAPIError = types.NewError(
+						fmt.Errorf(userMessage),
+						types.ErrorCodeChannelHeaderAuditFailed,
+						types.ErrOptionWithSkipRetry(),
+					)
+				} else {
+					newAPIError = types.NewError(
+						fmt.Errorf(userMessage),
+						types.ErrorCodeChannelContentAuditFailed,
+						types.ErrOptionWithSkipRetry(),
+					)
+				}
+				newAPIError.StatusCode = http.StatusForbidden
+				// 记录错误日志
+				processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+				return
+			}
+		}
+
 		requestBody, _ := common.GetRequestBody(c)
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
 
@@ -302,6 +332,7 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		other := make(map[string]interface{})
 		if c.Request != nil && c.Request.URL != nil {
 			other["request_path"] = c.Request.URL.Path
+			other["request_method"] = c.Request.Method
 		}
 		other["error_type"] = err.GetErrorType()
 		other["error_code"] = err.GetErrorCode()
@@ -309,6 +340,49 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		other["channel_id"] = channelId
 		other["channel_name"] = c.GetString("channel_name")
 		other["channel_type"] = c.GetInt("channel_type")
+
+		// 记录请求头（遮蔽敏感信息）
+		if c.Request != nil {
+			maskedHeaders := make(map[string]string)
+			sensitiveHeaders := map[string]bool{
+				"Authorization":       true,
+				"X-Api-Key":           true,
+				"Api-Key":             true,
+				"X-Auth-Token":        true,
+				"Cookie":              true,
+				"X-Custom-Auth":       true,
+				"Proxy-Authorization": true,
+			}
+			for key, values := range c.Request.Header {
+				if len(values) > 0 {
+					if sensitiveHeaders[key] {
+						// 遮蔽敏感头部，只显示前10个和后4个字符
+						val := values[0]
+						if len(val) > 20 {
+							maskedHeaders[key] = val[:10] + "****" + val[len(val)-4:]
+						} else if len(val) > 8 {
+							maskedHeaders[key] = val[:4] + "****" + val[len(val)-2:]
+						} else {
+							maskedHeaders[key] = "****"
+						}
+					} else {
+						maskedHeaders[key] = values[0]
+					}
+				}
+			}
+			other["request_headers"] = maskedHeaders
+		}
+
+		// 记录请求体（限制大小）
+		if requestBody, err := common.GetRequestBody(c); err == nil && len(requestBody) > 0 {
+			const maxBodySize = 4096 // 限制为4KB
+			bodyStr := string(requestBody)
+			if len(bodyStr) > maxBodySize {
+				bodyStr = bodyStr[:maxBodySize] + "...[truncated]"
+			}
+			other["request_body"] = bodyStr
+		}
+
 		adminInfo := make(map[string]interface{})
 		adminInfo["use_channel"] = c.GetStringSlice("use_channel")
 		isMultiKey := common.GetContextKeyBool(c, constant.ContextKeyChannelIsMultiKey)

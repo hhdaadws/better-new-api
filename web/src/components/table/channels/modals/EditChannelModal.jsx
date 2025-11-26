@@ -152,6 +152,11 @@ const EditChannelModal = (props) => {
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
+    // 渠道审核功能
+    header_audit_enabled: false,
+    header_audit_rules: '',
+    content_audit_enabled: false,
+    content_audit_keywords: '',
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -355,6 +360,10 @@ const EditChannelModal = (props) => {
     proxy: '',
     pass_through_body_enabled: false,
     system_prompt: '',
+    header_audit_enabled: false,
+    header_audit_rules: '',
+    content_audit_enabled: false,
+    content_audit_keywords: '',
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -536,6 +545,14 @@ const EditChannelModal = (props) => {
           data.system_prompt = parsedSettings.system_prompt || '';
           data.system_prompt_override =
             parsedSettings.system_prompt_override || false;
+          // 渠道审核设置
+          data.header_audit_enabled =
+            parsedSettings.header_audit_enabled || false;
+          data.header_audit_rules = parsedSettings.header_audit_rules || '';
+          data.content_audit_enabled =
+            parsedSettings.content_audit_enabled || false;
+          data.content_audit_keywords =
+            parsedSettings.content_audit_keywords || '';
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -544,6 +561,10 @@ const EditChannelModal = (props) => {
           data.pass_through_body_enabled = false;
           data.system_prompt = '';
           data.system_prompt_override = false;
+          data.header_audit_enabled = false;
+          data.header_audit_rules = '';
+          data.content_audit_enabled = false;
+          data.content_audit_keywords = '';
         }
       } else {
         data.force_format = false;
@@ -552,6 +573,10 @@ const EditChannelModal = (props) => {
         data.pass_through_body_enabled = false;
         data.system_prompt = '';
         data.system_prompt_override = false;
+        data.header_audit_enabled = false;
+        data.header_audit_rules = '';
+        data.content_audit_enabled = false;
+        data.content_audit_keywords = '';
       }
 
       if (data.settings) {
@@ -624,6 +649,10 @@ const EditChannelModal = (props) => {
         pass_through_body_enabled: data.pass_through_body_enabled,
         system_prompt: data.system_prompt,
         system_prompt_override: data.system_prompt_override || false,
+        header_audit_enabled: data.header_audit_enabled || false,
+        header_audit_rules: data.header_audit_rules || '',
+        content_audit_enabled: data.content_audit_enabled || false,
+        content_audit_keywords: data.content_audit_keywords || '',
       });
       initialModelsRef.current = (data.models || [])
         .map((model) => (model || '').trim())
@@ -882,6 +911,10 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: false,
       system_prompt: '',
       system_prompt_override: false,
+      header_audit_enabled: false,
+      header_audit_rules: '',
+      content_audit_enabled: false,
+      content_audit_keywords: '',
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1168,6 +1201,11 @@ const EditChannelModal = (props) => {
       pass_through_body_enabled: localInputs.pass_through_body_enabled || false,
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
+      // 渠道审核设置
+      header_audit_enabled: localInputs.header_audit_enabled || false,
+      header_audit_rules: localInputs.header_audit_rules || '',
+      content_audit_enabled: localInputs.content_audit_enabled || false,
+      content_audit_keywords: localInputs.content_audit_keywords || '',
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -1212,6 +1250,10 @@ const EditChannelModal = (props) => {
     delete localInputs.pass_through_body_enabled;
     delete localInputs.system_prompt;
     delete localInputs.system_prompt_override;
+    delete localInputs.header_audit_enabled;
+    delete localInputs.header_audit_rules;
+    delete localInputs.content_audit_enabled;
+    delete localInputs.content_audit_keywords;
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -2963,7 +3005,7 @@ const EditChannelModal = (props) => {
 
                     <Form.Switch
                       field='pass_through_headers'
-                      label={t('透传全部请求头')}
+                      label={t('透传扩展请求头')}
                       checkedText={t('开')}
                       uncheckedText={t('关')}
                       onChange={(value) =>
@@ -2973,7 +3015,7 @@ const EditChannelModal = (props) => {
                         )
                       }
                       extraText={t(
-                        '启用后将透传所有客户端请求头（User-Agent, Origin, Referer等），用于解决上游供应商的客户端限制。默认关闭，仅透传 Content-Type 和 Accept',
+                        '启用后将透传扩展请求头（anthropic-*, x-app, User-Agent）到上游 API，用于启用 Beta 功能和应用标识。默认关闭，仅透传 Content-Type 和 Accept',
                       )}
                     />
 
@@ -3018,6 +3060,77 @@ const EditChannelModal = (props) => {
                         '如果用户请求中包含系统提示词，则使用此设置拼接到用户的系统提示词前面',
                       )}
                     />
+
+                    {/* 渠道审核功能 */}
+                    <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>
+                      {t('渠道审核')}
+                    </div>
+
+                    <Form.Switch
+                      field='header_audit_enabled'
+                      label={t('启用请求头审核')}
+                      checkedText={t('开')}
+                      uncheckedText={t('关')}
+                      onChange={(value) =>
+                        handleChannelSettingsChange('header_audit_enabled', value)
+                      }
+                      extraText={t(
+                        '启用后将检查请求头是否符合指定的正则规则',
+                      )}
+                    />
+
+                    {inputs.header_audit_enabled && (
+                      <JSONEditor
+                        key={`header_audit_rules-${isEdit ? channelId : 'new'}`}
+                        field='header_audit_rules'
+                        label={t('请求头审核规则')}
+                        placeholder={t(
+                          '请输入 JSON 格式的审核规则，例如：\n{\n  "X-Custom-Header": "^allowed-.*$",\n  "User-Agent": ".*Chrome.*"\n}',
+                        )}
+                        value={inputs.header_audit_rules || ''}
+                        onChange={(value) =>
+                          handleChannelSettingsChange('header_audit_rules', value)
+                        }
+                        template={{ 'X-Custom-Header': '^allowed-.*$', 'User-Agent': '.*Chrome.*' }}
+                        templateLabel={t('填入模板')}
+                        editorType='keyValue'
+                        formApi={formApiRef.current}
+                        extraText={t(
+                          '键为请求头名称，值为正则表达式。请求头必须存在且匹配对应的正则才能通过审核',
+                        )}
+                      />
+                    )}
+
+                    <Form.Switch
+                      field='content_audit_enabled'
+                      label={t('启用内容审核')}
+                      checkedText={t('开')}
+                      uncheckedText={t('关')}
+                      onChange={(value) =>
+                        handleChannelSettingsChange('content_audit_enabled', value)
+                      }
+                      extraText={t(
+                        '启用后将检查请求内容是否包含禁止的关键词',
+                      )}
+                    />
+
+                    {inputs.content_audit_enabled && (
+                      <Form.TextArea
+                        field='content_audit_keywords'
+                        label={t('内容审核关键词')}
+                        placeholder={t(
+                          '请输入禁止的关键词，每行一个。匹配时不区分大小写。',
+                        )}
+                        onChange={(value) =>
+                          handleChannelSettingsChange('content_audit_keywords', value)
+                        }
+                        autosize
+                        showClear
+                        extraText={t(
+                          '每行一个关键词，请求内容包含任意关键词将被拒绝',
+                        )}
+                      />
+                    )}
                   </Card>
                 </div>
               </div>
