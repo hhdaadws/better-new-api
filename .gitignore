@@ -27,3 +27,4 @@ electron/dist
 *.docx
 CLIENT_INTEGRATION_GUIDE.md
 docker-compose.prod.yml
+DEPLOYMENT_NOTES.md
