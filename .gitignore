@@ -7,6 +7,7 @@ upload
 build
 *.db-journal
 logs
+*.log
 web/dist
 .env
 one-api
@@ -21,3 +22,8 @@ web/bun.lock
 
 electron/node_modules
 electron/dist
+
+# Generated docs
+*.docx
+CLIENT_INTEGRATION_GUIDE.md
+docker-compose.prod.yml
