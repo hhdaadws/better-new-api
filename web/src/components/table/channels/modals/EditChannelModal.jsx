@@ -2963,7 +2963,7 @@ const EditChannelModal = (props) => {
 
                     <Form.Switch
                       field='pass_through_headers'
-                      label={t('透传全部请求头')}
+                      label={t('透传扩展请求头')}
                       checkedText={t('开')}
                       uncheckedText={t('关')}
                       onChange={(value) =>
@@ -2973,7 +2973,7 @@ const EditChannelModal = (props) => {
                         )
                       }
                       extraText={t(
-                        '启用后将透传所有客户端请求头（User-Agent, Origin, Referer等），用于解决上游供应商的客户端限制。默认关闭，仅透传 Content-Type 和 Accept',
+                        '启用后将透传扩展请求头（anthropic-*, x-app, User-Agent）到上游 API，用于启用 Beta 功能和应用标识。默认关闭，仅透传 Content-Type 和 Accept',
                       )}
                     />
 
