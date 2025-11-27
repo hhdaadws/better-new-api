@@ -31,6 +31,10 @@ const ErrorLogsTable = (logsData) => {
     copyText,
     showDetailFunc,
     hasExpandableRows,
+    selectedRowKeys,
+    setSelectedRowKeys,
+    deleteLog,
+    isAdminUser,
     t,
     COLUMN_KEYS,
   } = logsData;
@@ -42,8 +46,10 @@ const ErrorLogsTable = (logsData) => {
       COLUMN_KEYS,
       copyText,
       showDetailFunc,
+      deleteLog,
+      isAdminUser,
     });
-  }, [t, COLUMN_KEYS, copyText, showDetailFunc]);
+  }, [t, COLUMN_KEYS, copyText, showDetailFunc, deleteLog, isAdminUser]);
 
   // Filter columns based on visibility settings
   const getVisibleColumns = () => {
@@ -64,6 +70,17 @@ const ErrorLogsTable = (logsData) => {
     return <Descriptions data={expandData[record.key]} />;
   };
 
+  // Row selection config
+  const rowSelection = isAdminUser
+    ? {
+        selectedRowKeys,
+        onChange: (selectedKeys) => setSelectedRowKeys(selectedKeys),
+        getCheckboxProps: (record) => ({
+          name: record.key,
+        }),
+      }
+    : null;
+
   return (
     <CardTable
       columns={tableColumns}
@@ -73,6 +90,7 @@ const ErrorLogsTable = (logsData) => {
         rowExpandable: (record) =>
           expandData[record.key] && expandData[record.key].length > 0,
       })}
+      {...(rowSelection && { rowSelection })}
       dataSource={logs}
       rowKey='key'
       loading={loading}

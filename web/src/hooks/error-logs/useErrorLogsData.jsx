@@ -59,6 +59,7 @@ export const useErrorLogsData = () => {
 
   // Form state
   const [formApi, setFormApi] = useState(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   let now = new Date();
   const formInitValues = {
     username: '',
@@ -67,6 +68,10 @@ export const useErrorLogsData = () => {
     channel: '',
     group: '',
     ip: '',
+    error_code: '',
+    status_code: '',
+    error_type: '',
+    content: '',
     dateRange: [
       timestamp2string(getTodayStartTimestamp()),
       timestamp2string(now.getTime() / 1000 + 3600),
@@ -175,6 +180,10 @@ export const useErrorLogsData = () => {
       channel: formValues.channel || '',
       group: formValues.group || '',
       ip: formValues.ip || '',
+      error_code: formValues.error_code || '',
+      status_code: formValues.status_code || '',
+      error_type: formValues.error_type || '',
+      content: formValues.content || '',
     };
   };
 
@@ -290,12 +299,16 @@ export const useErrorLogsData = () => {
       channel,
       group,
       ip,
+      error_code,
+      status_code,
+      error_type,
+      content,
     } = getFormValues();
 
     let localStartTimestamp = Date.parse(start_timestamp) / 1000;
     let localEndTimestamp = Date.parse(end_timestamp) / 1000;
 
-    let url = `/api/log/?p=${startIdx}&page_size=${pageSizeParam}&type=${LOG_TYPE_ERROR}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}&ip=${ip}`;
+    let url = `/api/log/?p=${startIdx}&page_size=${pageSizeParam}&type=${LOG_TYPE_ERROR}&username=${username}&token_name=${token_name}&model_name=${model_name}&start_timestamp=${localStartTimestamp}&end_timestamp=${localEndTimestamp}&channel=${channel}&group=${group}&ip=${ip}&error_code=${error_code}&status_code=${status_code}&error_type=${error_type}&content=${content}`;
     url = encodeURI(url);
 
     try {
@@ -337,6 +350,60 @@ export const useErrorLogsData = () => {
   const refresh = async () => {
     setActivePage(1);
     await loadLogs(1, pageSize);
+  };
+
+  // Delete single log
+  const deleteLog = async (id) => {
+    try {
+      const res = await API.delete(`/api/log/${id}`);
+      const { success, message } = res.data;
+      if (success) {
+        showSuccess(t('删除成功'));
+        await refresh();
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(error.message || t('删除失败'));
+    }
+  };
+
+  // Batch delete logs
+  const deleteLogs = async (ids) => {
+    if (!ids || ids.length === 0) {
+      showError(t('请选择要删除的日志'));
+      return;
+    }
+    try {
+      const res = await API.delete('/api/log/batch', { data: { ids } });
+      const { success, message, data } = res.data;
+      if (success) {
+        showSuccess(t('成功删除') + ` ${data} ` + t('条日志'));
+        setSelectedRowKeys([]);
+        await refresh();
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(error.message || t('批量删除失败'));
+    }
+  };
+
+  // Clear all error logs
+  const clearAllErrorLogs = async () => {
+    try {
+      const res = await API.delete('/api/log/error/clear');
+      const { success, message, data } = res.data;
+      if (success) {
+        showSuccess(t('成功清空') + ` ${data} ` + t('条错误日志'));
+        setSelectedRowKeys([]);
+        await refresh();
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(error.message || t('清空失败'));
+    }
   };
 
   // Copy text function
@@ -384,6 +451,10 @@ export const useErrorLogsData = () => {
     formInitValues,
     getFormValues,
 
+    // Selection state
+    selectedRowKeys,
+    setSelectedRowKeys,
+
     // Column visibility
     visibleColumns,
     showColumnSelector,
@@ -411,6 +482,11 @@ export const useErrorLogsData = () => {
     copyText,
     setLogsFormat,
     hasExpandableRows,
+
+    // Delete functions
+    deleteLog,
+    deleteLogs,
+    clearAllErrorLogs,
 
     // Translation
     t,

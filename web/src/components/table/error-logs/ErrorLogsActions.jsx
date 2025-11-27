@@ -8,8 +8,8 @@ License, or (at your option) any later version.
 */
 
 import React from 'react';
-import { Button, Typography, Space, Switch } from '@douyinfe/semi-ui';
-import { IconSetting, IconRefresh } from '@douyinfe/semi-icons';
+import { Button, Typography, Space, Switch, Popconfirm } from '@douyinfe/semi-ui';
+import { IconSetting, IconRefresh, IconDelete, IconDeleteStroked } from '@douyinfe/semi-icons';
 
 const { Title, Text } = Typography;
 
@@ -22,6 +22,10 @@ const ErrorLogsActions = (logsData) => {
     setShowColumnSelector,
     compactMode,
     setCompactMode,
+    selectedRowKeys,
+    deleteLogs,
+    clearAllErrorLogs,
+    isAdminUser,
   } = logsData;
 
   return (
@@ -49,6 +53,35 @@ const ErrorLogsActions = (logsData) => {
         >
           {t('列设置')}
         </Button>
+        {isAdminUser && selectedRowKeys && selectedRowKeys.length > 0 && (
+          <Popconfirm
+            title={t('确认删除')}
+            content={t('确定要删除选中的 {{count}} 条日志吗？', { count: selectedRowKeys.length })}
+            onConfirm={() => deleteLogs(selectedRowKeys)}
+          >
+            <Button
+              icon={<IconDeleteStroked />}
+              type='danger'
+            >
+              {t('删除选中')} ({selectedRowKeys.length})
+            </Button>
+          </Popconfirm>
+        )}
+        {isAdminUser && (
+          <Popconfirm
+            title={t('确认清空')}
+            content={t('确定要清空所有错误日志吗？此操作不可恢复！')}
+            onConfirm={clearAllErrorLogs}
+          >
+            <Button
+              icon={<IconDelete />}
+              type='danger'
+              theme='borderless'
+            >
+              {t('清空全部')}
+            </Button>
+          </Popconfirm>
+        )}
         <Button
           icon={<IconRefresh />}
           loading={loading}

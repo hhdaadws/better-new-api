@@ -8,7 +8,8 @@ License, or (at your option) any later version.
 */
 
 import React from 'react';
-import { Tag, Typography, Tooltip } from '@douyinfe/semi-ui';
+import { Tag, Typography, Tooltip, Popconfirm, Button } from '@douyinfe/semi-ui';
+import { IconDelete } from '@douyinfe/semi-icons';
 
 const { Text } = Typography;
 
@@ -17,6 +18,8 @@ export const getErrorLogsColumns = ({
   COLUMN_KEYS,
   copyText,
   showDetailFunc,
+  deleteLog,
+  isAdminUser,
 }) => {
   return [
     {
@@ -149,19 +152,35 @@ export const getErrorLogsColumns = ({
       ),
     },
     {
-      title: t('详情'),
+      title: t('操作'),
       dataIndex: 'id',
       key: COLUMN_KEYS.DETAILS,
-      width: 80,
+      width: isAdminUser ? 120 : 80,
       fixed: 'right',
-      render: (_, record) => (
-        <Text
-          link
-          onClick={() => showDetailFunc(record)}
-          style={{ cursor: 'pointer' }}
-        >
-          {t('查看')}
-        </Text>
+      render: (id, record) => (
+        <div className='flex items-center gap-2'>
+          <Text
+            link
+            onClick={() => showDetailFunc(record)}
+            style={{ cursor: 'pointer' }}
+          >
+            {t('查看')}
+          </Text>
+          {isAdminUser && deleteLog && (
+            <Popconfirm
+              title={t('确认删除')}
+              content={t('确定要删除这条日志吗？')}
+              onConfirm={() => deleteLog(id)}
+            >
+              <Button
+                icon={<IconDelete />}
+                type='danger'
+                theme='borderless'
+                size='small'
+              />
+            </Popconfirm>
+          )}
+        </div>
       ),
     },
   ];

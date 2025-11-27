@@ -180,43 +180,93 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	}
 }
 
+type LogFilterParams struct {
+	LogType        int
+	StartTimestamp int64
+	EndTimestamp   int64
+	ModelName      string
+	Username       string
+	TokenName      string
+	StartIdx       int
+	Num            int
+	Channel        int
+	Group          string
+	Ip             string
+	ErrorCode      string
+	StatusCode     int
+	ErrorType      string
+	Content        string
+}
+
 func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, ip string) (logs []*Log, total int64, err error) {
+	return GetAllLogsWithFilter(LogFilterParams{
+		LogType:        logType,
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		ModelName:      modelName,
+		Username:       username,
+		TokenName:      tokenName,
+		StartIdx:       startIdx,
+		Num:            num,
+		Channel:        channel,
+		Group:          group,
+		Ip:             ip,
+	})
+}
+
+func GetAllLogsWithFilter(params LogFilterParams) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
-	if logType == LogTypeUnknown {
+	if params.LogType == LogTypeUnknown {
 		tx = LOG_DB
 	} else {
-		tx = LOG_DB.Where("logs.type = ?", logType)
+		tx = LOG_DB.Where("logs.type = ?", params.LogType)
 	}
 
-	if modelName != "" {
-		tx = tx.Where("logs.model_name like ?", modelName)
+	if params.ModelName != "" {
+		tx = tx.Where("logs.model_name like ?", params.ModelName)
 	}
-	if username != "" {
-		tx = tx.Where("logs.username = ?", username)
+	if params.Username != "" {
+		tx = tx.Where("logs.username = ?", params.Username)
 	}
-	if tokenName != "" {
-		tx = tx.Where("logs.token_name = ?", tokenName)
+	if params.TokenName != "" {
+		tx = tx.Where("logs.token_name = ?", params.TokenName)
 	}
-	if startTimestamp != 0 {
-		tx = tx.Where("logs.created_at >= ?", startTimestamp)
+	if params.StartTimestamp != 0 {
+		tx = tx.Where("logs.created_at >= ?", params.StartTimestamp)
 	}
-	if endTimestamp != 0 {
-		tx = tx.Where("logs.created_at <= ?", endTimestamp)
+	if params.EndTimestamp != 0 {
+		tx = tx.Where("logs.created_at <= ?", params.EndTimestamp)
 	}
-	if channel != 0 {
-		tx = tx.Where("logs.channel_id = ?", channel)
+	if params.Channel != 0 {
+		tx = tx.Where("logs.channel_id = ?", params.Channel)
 	}
-	if group != "" {
-		tx = tx.Where("logs."+logGroupCol+" = ?", group)
+	if params.Group != "" {
+		tx = tx.Where("logs."+logGroupCol+" = ?", params.Group)
 	}
-	if ip != "" {
-		tx = tx.Where("logs.ip = ?", ip)
+	if params.Ip != "" {
+		tx = tx.Where("logs.ip = ?", params.Ip)
+	}
+	// 错误码筛选 (在other JSON字段中)
+	if params.ErrorCode != "" {
+		tx = tx.Where("logs.other LIKE ?", fmt.Sprintf("%%\"error_code\":\"%s\"%%", params.ErrorCode))
+	}
+	// HTTP状态码筛选 (在other JSON字段中)
+	if params.StatusCode != 0 {
+		tx = tx.Where("logs.other LIKE ?", fmt.Sprintf("%%\"status_code\":%d%%", params.StatusCode))
+	}
+	// 错误类型筛选 (在other JSON字段中)
+	if params.ErrorType != "" {
+		tx = tx.Where("logs.other LIKE ?", fmt.Sprintf("%%\"error_type\":\"%s\"%%", params.ErrorType))
+	}
+	// 内容关键词搜索
+	if params.Content != "" {
+		tx = tx.Where("logs.content LIKE ?", "%"+params.Content+"%")
 	}
 	err = tx.Model(&Log{}).Count(&total).Error
 	if err != nil {
 		return nil, 0, err
 	}
-	err = tx.Order("logs.id desc").Limit(num).Offset(startIdx).Find(&logs).Error
+	err = tx.Order("logs.id desc").Limit(params.Num).Offset(params.StartIdx).Find(&logs).Error
 	if err != nil {
 		return nil, 0, err
 	}
@@ -377,6 +427,48 @@ func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64,
 		}
 
 		result := LOG_DB.Where("created_at < ?", targetTimestamp).Limit(limit).Delete(&Log{})
+		if nil != result.Error {
+			return total, result.Error
+		}
+
+		total += result.RowsAffected
+
+		if result.RowsAffected < int64(limit) {
+			break
+		}
+	}
+
+	return total, nil
+}
+
+// DeleteLogById 根据ID删除单条日志
+func DeleteLogById(id int) error {
+	result := LOG_DB.Delete(&Log{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("log not found")
+	}
+	return nil
+}
+
+// DeleteLogsByIds 批量删除日志
+func DeleteLogsByIds(ids []int) (int64, error) {
+	result := LOG_DB.Delete(&Log{}, ids)
+	return result.RowsAffected, result.Error
+}
+
+// ClearErrorLogs 清空所有错误日志
+func ClearErrorLogs(ctx context.Context, limit int) (int64, error) {
+	var total int64 = 0
+
+	for {
+		if nil != ctx.Err() {
+			return total, ctx.Err()
+		}
+
+		result := LOG_DB.Where("type = ?", LogTypeError).Limit(limit).Delete(&Log{})
 		if nil != result.Error {
 			return total, result.Error
 		}
