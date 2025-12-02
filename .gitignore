@@ -22,9 +22,14 @@ web/bun.lock
 
 electron/node_modules
 electron/dist
+data/
 
 # Generated docs
 *.docx
 CLIENT_INTEGRATION_GUIDE.md
 docker-compose.prod.yml
 DEPLOYMENT_NOTES.md
+
+# Database backups
+backups/
+*.sql
