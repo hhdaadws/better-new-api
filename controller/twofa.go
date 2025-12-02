@@ -543,9 +543,14 @@ func AdminDisable2FA(c *gin.Context) {
 	}
 
 	// 记录操作日志
-	adminId := c.GetInt("id")
+	adminUsername := c.GetString("username")
+	user, _ := model.GetUserById(userId, false)
+	username := ""
+	if user != nil {
+		username = user.Username
+	}
 	model.RecordLog(userId, model.LogTypeManage,
-		fmt.Sprintf("管理员(ID:%d)强制禁用了用户的两步验证", adminId))
+		fmt.Sprintf("管理员 %s 强制禁用了用户 %s (ID: %d) 的两步验证", adminUsername, username, userId))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
