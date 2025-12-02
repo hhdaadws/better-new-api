@@ -502,14 +502,31 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 }
 
 func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
+	// For "free" group, handle check-in quota exclusively
+	isFreeGroup := relayInfo.UsingGroup == CheckinQuotaGroup
 
-	if quota > 0 {
-		err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+	if isFreeGroup {
+		// Free group: adjust check-in quota only, never touch user's paid quota
+		if quota > 0 {
+			// Need to consume more from check-in quota
+			_, err = ConsumeCheckinQuota(relayInfo.UserId, quota)
+		} else if quota < 0 {
+			// Return excess check-in quota
+			err = ReturnCheckinQuota(relayInfo.UserId, -quota)
+		}
+		if err != nil {
+			return err
+		}
 	} else {
-		err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)
-	}
-	if err != nil {
-		return err
+		// Non-free group: handle user's paid quota
+		if quota > 0 {
+			err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+		} else {
+			err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	if !relayInfo.IsPlayground {
@@ -523,7 +540,8 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 		}
 	}
 
-	if sendEmail {
+	if sendEmail && !isFreeGroup {
+		// Only send quota notification for paid quota
 		if (quota + preConsumedQuota) != 0 {
 			checkAndSendQuotaNotify(relayInfo, quota, preConsumedQuota)
 		}

@@ -18,10 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Avatar, Skeleton, Tag } from '@douyinfe/semi-ui';
+import { Card, Avatar, Skeleton, Tag, Tooltip } from '@douyinfe/semi-ui';
 import { VChart } from '@visactor/react-vchart';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Gift } from 'lucide-react';
 
 const StatsCards = ({
   groupedStatsData,
@@ -59,7 +60,7 @@ const StatsCards = ({
                     </Avatar>
                     <div>
                       <div className='text-xs text-gray-500'>{item.title}</div>
-                      <div className='text-lg font-semibold'>
+                      <div className='text-lg font-semibold flex items-center gap-2'>
                         <Skeleton
                           loading={loading}
                           active
@@ -77,6 +78,14 @@ const StatsCards = ({
                         >
                           {item.value}
                         </Skeleton>
+                        {item.freeQuota && (
+                          <Tooltip content={t('签到免费额度（仅限free分组渠道）')}>
+                            <span className='inline-flex items-center gap-1 text-sm font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full'>
+                              <Gift className='w-3.5 h-3.5' />
+                              {item.freeQuota}
+                            </span>
+                          </Tooltip>
+                        )}
                       </div>
                     </div>
                   </div>

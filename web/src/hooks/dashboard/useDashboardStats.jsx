@@ -41,6 +41,7 @@ export const useDashboardStats = (
   performanceMetrics,
   navigate,
   t,
+  freeQuota = 0,
 ) => {
   const groupedStatsData = useMemo(
     () => [
@@ -55,6 +56,7 @@ export const useDashboardStats = (
             avatarColor: 'blue',
             trendData: [],
             trendColor: '#3b82f6',
+            freeQuota: freeQuota > 0 ? renderQuota(freeQuota) : null,
           },
           {
             title: t('历史消耗'),
@@ -144,6 +146,7 @@ export const useDashboardStats = (
       performanceMetrics,
       navigate,
       t,
+      freeQuota,
     ],
   );
 

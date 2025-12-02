@@ -41,6 +41,7 @@ const routerMap = {
   errorLog: '/console/error-log',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
+  checkin: '/console/checkin',
   about: '/about',
   detail: '/console',
   pricing: '/pricing',
@@ -181,6 +182,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'setting',
         to: '/setting',
         className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('签到管理'),
+        itemKey: 'checkin',
+        to: '/checkin',
+        className: isAdmin() ? '' : 'tableHiddle',
       },
     ];
 

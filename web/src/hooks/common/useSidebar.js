@@ -65,6 +65,7 @@ export const useSidebar = () => {
       user: true,
       errorLog: true,
       setting: true,
+      checkin: true,
     },
   };
 
