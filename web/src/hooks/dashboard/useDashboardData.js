@@ -61,6 +61,9 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const [lineData, setLineData] = useState([]);
   const [modelColors, setModelColors] = useState({});
 
+  // ========== 签到免费余额状态 ==========
+  const [freeQuota, setFreeQuota] = useState(0);
+
   // ========== 图表状态 ==========
   const [activeChartTab, setActiveChartTab] = useState('1');
 
@@ -223,11 +226,24 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     }
   }, [userDispatch]);
 
+  const getCheckinStatus = useCallback(async () => {
+    try {
+      const res = await API.get('/api/user/checkin');
+      if (res.data.success && res.data.data.status) {
+        setFreeQuota(res.data.data.status.quota_remaining || 0);
+      }
+    } catch (err) {
+      // 签到功能可能未启用，静默失败
+      setFreeQuota(0);
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     const data = await loadQuotaData();
     await loadUptimeData();
+    await getCheckinStatus();
     return data;
-  }, [loadQuotaData, loadUptimeData]);
+  }, [loadQuotaData, loadUptimeData, getCheckinStatus]);
 
   const handleSearchConfirm = useCallback(
     async (updateChartDataCallback) => {
@@ -251,9 +267,10 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   useEffect(() => {
     if (!initialized.current) {
       getUserData();
+      getCheckinStatus();
       initialized.current = true;
     }
-  }, [getUserData]);
+  }, [getUserData, getCheckinStatus]);
 
   return {
     // 基础状态
@@ -279,6 +296,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     setLineData,
     modelColors,
     setModelColors,
+    freeQuota,
 
     // 图表状态
     activeChartTab,

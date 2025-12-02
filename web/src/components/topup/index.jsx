@@ -35,6 +35,7 @@ import { StatusContext } from '../../context/Status';
 
 import RechargeCard from './RechargeCard';
 import InvitationCard from './InvitationCard';
+import CheckinCard from './CheckinCard';
 import TransferModal from './modals/TransferModal';
 import PaymentConfirmModal from './modals/PaymentConfirmModal';
 import TopupHistoryModal from './modals/TopupHistoryModal';
@@ -661,6 +662,9 @@ const TopUp = () => {
           </>
         )}
       </Modal>
+
+      {/* 每日签到卡片 */}
+      <CheckinCard t={t} onCheckinSuccess={getUserQuota} />
 
       {/* 用户信息头部 */}
       <div className='space-y-6'>

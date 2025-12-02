@@ -74,6 +74,7 @@ import {
   CircleUser,
   Package,
   AlertTriangle,
+  CalendarCheck,
 } from 'lucide-react';
 
 // 获取侧边栏Lucide图标组件
@@ -119,6 +120,8 @@ export function getLucideIcon(key, selected = false) {
       return <AlertTriangle {...commonProps} color={iconColor} />;
     case 'setting':
       return <Settings {...commonProps} color={iconColor} />;
+    case 'checkin':
+      return <CalendarCheck {...commonProps} color={iconColor} />;
     default:
       return <CircleUser {...commonProps} color={iconColor} />;
   }

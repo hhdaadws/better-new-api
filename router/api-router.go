@@ -87,6 +87,10 @@ func SetApiRouter(router *gin.Engine) {
 				selfRoute.POST("/aff_transfer", controller.TransferAffQuota)
 				selfRoute.PUT("/setting", controller.UpdateUserSetting)
 
+				// Check-in routes (签到)
+				selfRoute.GET("/checkin", controller.GetCheckinInfo)
+				selfRoute.POST("/checkin", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.PerformCheckin)
+
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)
 				selfRoute.POST("/2fa/setup", controller.Setup2FA)
@@ -121,6 +125,10 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.PUT("/", controller.UpdateOption)
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 			optionRoute.POST("/migrate_console_setting", controller.MigrateConsoleSetting) // 用于迁移检测的旧键，下个版本会删除
+
+			// Check-in admin routes (签到管理)
+			optionRoute.GET("/checkin", controller.AdminGetCheckinConfig)
+			optionRoute.PUT("/checkin", controller.AdminUpdateCheckinConfig)
 		}
 		ratioSyncRoute := apiRouter.Group("/ratio_sync")
 		ratioSyncRoute.Use(middleware.RootAuth())
