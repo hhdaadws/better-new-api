@@ -28,3 +28,7 @@ electron/dist
 CLIENT_INTEGRATION_GUIDE.md
 docker-compose.prod.yml
 DEPLOYMENT_NOTES.md
+
+# Database backups
+backups/
+*.sql
