@@ -66,9 +66,10 @@ const CheckinCard = ({ t, onCheckinSuccess }) => {
 
     setCheckinLoading(true);
     try {
-      const res = await API.post('/api/user/checkin', {
-        turnstile: turnstileToken,
-      });
+      const url = config?.turnstile_required && turnstileToken
+        ? `/api/user/checkin?turnstile=${turnstileToken}`
+        : '/api/user/checkin';
+      const res = await API.post(url, {});
       if (res.data.success) {
         showSuccess(res.data.data.message);
         setStatus(res.data.data.status);
