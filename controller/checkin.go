@@ -52,13 +52,16 @@ func GetCheckinInfo(c *gin.Context) {
 		return
 	}
 
+	// 签到强制使用 Turnstile（只要配置了 site key）
+	turnstileRequired := common.TurnstileSiteKey != "" && common.TurnstileSecretKey != ""
+
 	common.ApiSuccess(c, gin.H{
 		"config": gin.H{
 			"enabled":            checkinConfig.Enabled,
 			"quota_amount":       checkinConfig.QuotaAmount,
 			"quota_amount_label": logger.LogQuota(checkinConfig.QuotaAmount),
 			"group":              checkinConfig.Group,
-			"turnstile_required": common.TurnstileCheckEnabled,
+			"turnstile_required": turnstileRequired,
 			"turnstile_site_key": common.TurnstileSiteKey,
 		},
 		"status": status,

@@ -89,7 +89,7 @@ func SetApiRouter(router *gin.Engine) {
 
 				// Check-in routes (签到)
 				selfRoute.GET("/checkin", controller.GetCheckinInfo)
-				selfRoute.POST("/checkin", middleware.CriticalRateLimit(), middleware.TurnstileCheck(), controller.PerformCheckin)
+				selfRoute.POST("/checkin", middleware.CriticalRateLimit(), middleware.TurnstileCheckForced(), controller.PerformCheckin)
 
 				// 2FA routes
 				selfRoute.GET("/2fa/status", controller.Get2FAStatus)

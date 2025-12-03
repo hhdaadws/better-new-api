@@ -79,3 +79,58 @@ func TurnstileCheck() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// TurnstileCheckForced 强制验证 Turnstile（用于签到等必须验证的场景）
+// 只要配置了 TurnstileSiteKey 和 TurnstileSecretKey 就必须验证
+// 不依赖 TurnstileCheckEnabled 全局开关，且不使用 session 缓存
+func TurnstileCheckForced() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 只要配置了密钥就强制验证
+		if common.TurnstileSiteKey != "" && common.TurnstileSecretKey != "" {
+			response := c.Query("turnstile")
+			if response == "" {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": "请完成人机验证",
+				})
+				c.Abort()
+				return
+			}
+			rawRes, err := http.PostForm("https://challenges.cloudflare.com/turnstile/v0/siteverify", url.Values{
+				"secret":   {common.TurnstileSecretKey},
+				"response": {response},
+				"remoteip": {c.ClientIP()},
+			})
+			if err != nil {
+				common.SysLog(err.Error())
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": err.Error(),
+				})
+				c.Abort()
+				return
+			}
+			defer rawRes.Body.Close()
+			var res turnstileCheckResponse
+			err = json.NewDecoder(rawRes.Body).Decode(&res)
+			if err != nil {
+				common.SysLog(err.Error())
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": err.Error(),
+				})
+				c.Abort()
+				return
+			}
+			if !res.Success {
+				c.JSON(http.StatusOK, gin.H{
+					"success": false,
+					"message": "Turnstile 校验失败，请刷新重试！",
+				})
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
+	}
+}
