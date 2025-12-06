@@ -33,3 +33,6 @@ DEPLOYMENT_NOTES.md
 # Database backups
 backups/
 *.sql
+
+# Claude knowledge file
+CLAUDE.md
