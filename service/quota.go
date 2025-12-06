@@ -502,6 +502,21 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 }
 
 func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
+	// ========== 新增：优先尝试使用订阅额度 ==========
+	used, err := TryConsumeSubscriptionQuota(relayInfo, quota)
+	if used {
+		// 使用了订阅额度，但仍需消费 Token 额度
+		if !relayInfo.IsPlayground {
+			if quota > 0 {
+				err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)
+			} else {
+				err = model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, -quota)
+			}
+		}
+		return err
+	}
+	// ========== 订阅额度不可用，使用原有逻辑 ==========
+
 	// For "free" group, handle check-in quota exclusively
 	isFreeGroup := relayInfo.UsingGroup == CheckinQuotaGroup
 

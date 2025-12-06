@@ -198,6 +198,31 @@ func SetApiRouter(router *gin.Engine) {
 			redemptionRoute.DELETE("/invalid", controller.DeleteInvalidRedemption)
 			redemptionRoute.DELETE("/:id", controller.DeleteRedemption)
 		}
+
+		// Subscription routes - 订阅套餐路由
+		subscriptionRoute := apiRouter.Group("/subscription")
+		{
+			// Admin routes
+			adminSubscriptionRoute := subscriptionRoute.Group("/")
+			adminSubscriptionRoute.Use(middleware.AdminAuth())
+			{
+				adminSubscriptionRoute.GET("/", controller.GetAllSubscriptions)
+				adminSubscriptionRoute.GET("/:id", controller.GetSubscription)
+				adminSubscriptionRoute.POST("/", controller.AddSubscription)
+				adminSubscriptionRoute.PUT("/:id", controller.UpdateSubscription)
+				adminSubscriptionRoute.DELETE("/:id", controller.DeleteSubscription)
+				adminSubscriptionRoute.POST("/redemption", controller.AddSubscriptionRedemption)
+			}
+
+			// User routes
+			userSubscriptionRoute := subscriptionRoute.Group("/user")
+			userSubscriptionRoute.Use(middleware.UserAuth())
+			{
+				userSubscriptionRoute.GET("/", controller.GetMySubscriptions)
+				userSubscriptionRoute.GET("/:id/quota", controller.GetMySubscriptionQuota)
+				userSubscriptionRoute.GET("/logs", controller.GetMySubscriptionLogs)
+			}
+		}
 		logRoute := apiRouter.Group("/log")
 		logRoute.GET("/", middleware.AdminAuth(), controller.GetAllLogs)
 		logRoute.DELETE("/", middleware.AdminAuth(), controller.DeleteHistoryLogs)

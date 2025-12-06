@@ -97,6 +97,26 @@ export const getRedemptionsColumns = ({
       dataIndex: 'name',
     },
     {
+      title: t('类型'),
+      dataIndex: 'type',
+      render: (type, record) => {
+        if (type === 2) {
+          // 订阅套餐码
+          return (
+            <Tag color='purple' shape='circle'>
+              {t('订阅套餐')}
+            </Tag>
+          );
+        }
+        // 普通充值码
+        return (
+          <Tag color='blue' shape='circle'>
+            {t('充值码')}
+          </Tag>
+        );
+      },
+    },
+    {
       title: t('状态'),
       dataIndex: 'status',
       key: 'status',
@@ -105,9 +125,20 @@ export const getRedemptionsColumns = ({
       },
     },
     {
-      title: t('额度'),
+      title: t('额度/套餐'),
       dataIndex: 'quota',
-      render: (text) => {
+      render: (text, record) => {
+        // 如果是订阅套餐码，显示套餐名称
+        if (record.type === 2 && record.subscription_info) {
+          return (
+            <div>
+              <Tag color='purple' shape='circle'>
+                {record.subscription_info.name}
+              </Tag>
+            </div>
+          );
+        }
+        // 普通充值码显示额度
         return (
           <div>
             <Tag color='grey' shape='circle'>
