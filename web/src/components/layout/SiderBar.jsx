@@ -38,8 +38,10 @@ const routerMap = {
   topup: '/console/topup',
   user: '/console/user',
   log: '/console/log',
+  errorLog: '/console/error-log',
   midjourney: '/console/midjourney',
   setting: '/console/setting',
+  checkin: '/console/checkin',
   about: '/about',
   detail: '/console',
   pricing: '/pricing',
@@ -170,10 +172,22 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
+        text: t('错误日志'),
+        itemKey: 'errorLog',
+        to: '/console/error-log',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
         text: t('系统设置'),
         itemKey: 'setting',
         to: '/setting',
         className: isRoot() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('签到管理'),
+        itemKey: 'checkin',
+        to: '/checkin',
+        className: isAdmin() ? '' : 'tableHiddle',
       },
     ];
 

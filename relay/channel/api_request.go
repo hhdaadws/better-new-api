@@ -30,10 +30,43 @@ func SetupApiRequestHeader(info *common.RelayInfo, c *gin.Context, req *http.Hea
 	} else if info.RelayMode == constant.RelayModeRealtime {
 		// websocket
 	} else {
+		// 默认行为：仅透传Content-Type和Accept
 		req.Set("Content-Type", c.Request.Header.Get("Content-Type"))
 		req.Set("Accept", c.Request.Header.Get("Accept"))
 		if info.IsStream && c.Request.Header.Get("Accept") == "" {
 			req.Set("Accept", "text/event-stream")
+		}
+
+		// 如果启用了透传扩展请求头
+		if info.ChannelOtherSettings.PassThroughHeaders {
+			// 使用白名单模式，只透传特定的扩展请求头
+			for key, values := range c.Request.Header {
+				lowerKey := strings.ToLower(key)
+
+				// 透传规则（白名单）：
+				// 1. anthropic-* 前缀的所有头（如 anthropic-version, anthropic-beta）
+				// 2. 特定的 x-* 头：x-app（应用标识）
+				// 3. User-Agent（用户代理，用于统计）
+				shouldPassThrough := false
+
+				if strings.HasPrefix(lowerKey, "anthropic-") {
+					// anthropic-* 前缀的头（API版本、Beta功能等）
+					shouldPassThrough = true
+				} else if lowerKey == "x-app" {
+					// 应用标识头
+					shouldPassThrough = true
+				} else if lowerKey == "user-agent" {
+					// 用户代理
+					shouldPassThrough = true
+				}
+
+				if shouldPassThrough {
+					// 设置请求头（保留所有值）
+					for _, value := range values {
+						req.Add(key, value)
+					}
+				}
+			}
 		}
 	}
 }
@@ -71,6 +104,12 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 		return nil, fmt.Errorf("new request failed: %w", err)
 	}
 	headers := req.Header
+
+	// 记录客户端原始请求头（用于调试）
+	if common2.DebugEnabled {
+		logger.LogDebug(c.Request.Context(), fmt.Sprintf("Client headers: %v", c.Request.Header))
+	}
+
 	headerOverride, err := processHeaderOverride(info)
 	if err != nil {
 		return nil, err
@@ -82,6 +121,12 @@ func DoApiRequest(a Adaptor, c *gin.Context, info *common.RelayInfo, requestBody
 	if err != nil {
 		return nil, fmt.Errorf("setup request header failed: %w", err)
 	}
+
+	// 记录发送给上游的请求头（用于调试）
+	if common2.DebugEnabled {
+		logger.LogDebug(c.Request.Context(), fmt.Sprintf("Upstream headers: %v", headers))
+	}
+
 	resp, err := doRequest(c, req, info)
 	if err != nil {
 		return nil, fmt.Errorf("do request failed: %w", err)

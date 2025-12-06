@@ -63,16 +63,28 @@ export const useSidebar = () => {
       models: true,
       redemption: true,
       user: true,
+      errorLog: true,
       setting: true,
+      checkin: true,
     },
   };
 
-  // 获取管理员配置
+  // 获取管理员配置（合并默认配置以支持新增功能）
   const adminConfig = useMemo(() => {
     if (statusState?.status?.SidebarModulesAdmin) {
       try {
         const config = JSON.parse(statusState.status.SidebarModulesAdmin);
-        return config;
+        // 深度合并：将默认配置中的新字段合并到后端配置中
+        const mergedConfig = {};
+        Object.keys(defaultAdminConfig).forEach((sectionKey) => {
+          const defaultSection = defaultAdminConfig[sectionKey];
+          const configSection = config[sectionKey] || {};
+          mergedConfig[sectionKey] = {
+            ...defaultSection, // 先填充默认值（包括新功能）
+            ...configSection,  // 再用后端配置覆盖
+          };
+        });
+        return mergedConfig;
       } catch (error) {
         return defaultAdminConfig;
       }

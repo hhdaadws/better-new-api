@@ -20,7 +20,29 @@ func GetAllLogs(c *gin.Context) {
 	modelName := c.Query("model_name")
 	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	logs, total, err := model.GetAllLogs(logType, startTimestamp, endTimestamp, modelName, username, tokenName, pageInfo.GetStartIdx(), pageInfo.GetPageSize(), channel, group)
+	ip := c.Query("ip")
+	errorCode := c.Query("error_code")
+	statusCode, _ := strconv.Atoi(c.Query("status_code"))
+	errorType := c.Query("error_type")
+	content := c.Query("content")
+
+	logs, total, err := model.GetAllLogsWithFilter(model.LogFilterParams{
+		LogType:        logType,
+		StartTimestamp: startTimestamp,
+		EndTimestamp:   endTimestamp,
+		ModelName:      modelName,
+		Username:       username,
+		TokenName:      tokenName,
+		StartIdx:       pageInfo.GetStartIdx(),
+		Num:            pageInfo.GetPageSize(),
+		Channel:        channel,
+		Group:          group,
+		Ip:             ip,
+		ErrorCode:      errorCode,
+		StatusCode:     statusCode,
+		ErrorType:      errorType,
+		Content:        content,
+	})
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -166,4 +188,73 @@ func DeleteHistoryLogs(c *gin.Context) {
 		"data":    count,
 	})
 	return
+}
+
+// DeleteLogById 删除单条日志
+func DeleteLogById(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "invalid log id",
+		})
+		return
+	}
+	err = model.DeleteLogById(id)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+	})
+}
+
+// DeleteLogsBatch 批量删除日志
+func DeleteLogsBatch(c *gin.Context) {
+	var req struct {
+		Ids []int `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "invalid request body",
+		})
+		return
+	}
+	if len(req.Ids) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "no ids provided",
+		})
+		return
+	}
+	count, err := model.DeleteLogsByIds(req.Ids)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    count,
+	})
+}
+
+// ClearErrorLogs 清空所有错误日志
+func ClearErrorLogs(c *gin.Context) {
+	count, err := model.ClearErrorLogs(c.Request.Context(), 100)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    count,
+	})
 }

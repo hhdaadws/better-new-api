@@ -36,6 +36,7 @@ import Token from './pages/Token';
 import Redemption from './pages/Redemption';
 import TopUp from './pages/TopUp';
 import Log from './pages/Log';
+import ErrorLog from './pages/ErrorLog';
 import Chat from './pages/Chat';
 import Chat2Link from './pages/Chat2Link';
 import Midjourney from './pages/Midjourney';
@@ -47,6 +48,7 @@ import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
 import Setup from './pages/Setup';
 import SetupCheck from './components/layout/SetupCheck';
+import CheckinSetting from './pages/Checkin';
 
 const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -227,6 +229,16 @@ function App() {
           }
         />
         <Route
+          path='/console/checkin'
+          element={
+            <AdminRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <CheckinSetting />
+              </Suspense>
+            </AdminRoute>
+          }
+        />
+        <Route
           path='/console/personal'
           element={
             <PrivateRoute>
@@ -252,6 +264,14 @@ function App() {
             <PrivateRoute>
               <Log />
             </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/error-log'
+          element={
+            <AdminRoute>
+              <ErrorLog />
+            </AdminRoute>
           }
         />
         <Route
