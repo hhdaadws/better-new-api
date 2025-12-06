@@ -175,7 +175,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 				// 记录详细原因到日志（仅管理员可见）
 				logger.LogWarn(c, fmt.Sprintf("channel audit failed: %s", auditResult.FailedReason))
 				// 返回给用户简洁的警告消息
-				userMessage := "[MikuCode] Your request has been blocked due to policy violation. Continued violations may result in account suspension."
+				userMessage := "[HuggingCode] Your request has been blocked due to policy violation. Continued violations may result in account suspension."
 				if auditResult.FailedType == "header" {
 					newAPIError = types.NewError(
 						fmt.Errorf(userMessage),
