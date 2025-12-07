@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Tag, Space, Modal, Form, Input, InputNumber, Select, message, Popconfirm, TextArea } from '@douyinfe/semi-ui';
+import { Button, Table, Tag, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, TextArea } from '@douyinfe/semi-ui';
 import { API } from '../helpers';
-import { showError } from '../helpers/utils';
+import { showError, showSuccess } from '../helpers/utils';
 
 const SubscriptionsTable = () => {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -165,7 +165,7 @@ const SubscriptionsTable = () => {
     try {
       const res = await API.delete(`/api/subscription/${id}`);
       if (res.data.success) {
-        message.success('删除成功');
+        showSuccess('删除成功');
         fetchData();
       } else {
         showError(res.data.message);
@@ -183,7 +183,7 @@ const SubscriptionsTable = () => {
         values.id = editingId;
         const res = await API.put(`/api/subscription/${editingId}`, values);
         if (res.data.success) {
-          message.success('更新成功');
+          showSuccess('更新成功');
           setModalVisible(false);
           fetchData();
         } else {
@@ -192,7 +192,7 @@ const SubscriptionsTable = () => {
       } else {
         const res = await API.post('/api/subscription/', values);
         if (res.data.success) {
-          message.success('创建成功');
+          showSuccess('创建成功');
           setModalVisible(false);
           fetchData();
         } else {
@@ -222,7 +222,7 @@ const SubscriptionsTable = () => {
 
       if (res.data.success) {
         setRedemptionKeys(res.data.data);
-        message.success(`成功生成 ${res.data.data.length} 个兑换码`);
+        showSuccess(`成功生成 ${res.data.data.length} 个兑换码`);
       } else {
         showError(res.data.message);
       }
@@ -233,9 +233,9 @@ const SubscriptionsTable = () => {
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text).then(() => {
-      message.success('已复制到剪贴板');
+      showSuccess('已复制到剪贴板');
     }).catch(() => {
-      message.error('复制失败');
+      showError('复制失败');
     });
   };
 
