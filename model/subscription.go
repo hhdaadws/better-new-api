@@ -10,7 +10,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 
 	"github.com/bytedance/gopkg/util/gopool"
-	"gorm.io/gorm"
 )
 
 // 套餐状态常量
@@ -476,7 +475,7 @@ func CacheSetUserSubscription(userId int, us *UserSubscription) error {
 	if err != nil {
 		return err
 	}
-	return common.RedisClient.Set(context.Background(), key, data, 30*time.Minute).Err()
+	return common.RDB.Set(context.Background(), key, data, 30*time.Minute).Err()
 }
 
 // CacheGetUserSubscription 获取缓存的用户订阅
@@ -485,7 +484,7 @@ func CacheGetUserSubscription(userId int) (*UserSubscription, error) {
 		return nil, errors.New("redis not enabled")
 	}
 	key := fmt.Sprintf("user_subscription:%d", userId)
-	data, err := common.RedisClient.Get(context.Background(), key).Result()
+	data, err := common.RDB.Get(context.Background(), key).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +499,7 @@ func CacheDeleteUserSubscription(userId int) error {
 		return nil
 	}
 	key := fmt.Sprintf("user_subscription:%d", userId)
-	return common.RedisClient.Del(context.Background(), key).Err()
+	return common.RDB.Del(context.Background(), key).Err()
 }
 
 // CacheIncrSubscriptionQuota 原子性增加订阅额度使用量（Redis HINCRBY）
@@ -510,5 +509,5 @@ func CacheIncrSubscriptionQuota(userSubscriptionId int, quotaType string, amount
 	}
 	key := fmt.Sprintf("subscription_quota:%d", userSubscriptionId)
 	field := fmt.Sprintf("%s_used", quotaType) // daily_used, weekly_used, monthly_used
-	return common.RedisClient.HIncrBy(context.Background(), key, field, int64(amount)).Err()
+	return common.RDB.HIncrBy(context.Background(), key, field, int64(amount)).Err()
 }
