@@ -207,7 +207,7 @@ func SetApiRouter(router *gin.Engine) {
 			adminSubscriptionRoute.Use(middleware.AdminAuth())
 			{
 				adminSubscriptionRoute.GET("/", controller.GetAllSubscriptions)
-				adminSubscriptionRoute.GET("/:id", controller.GetSubscription)
+				adminSubscriptionRoute.GET("/:id", controller.GetSubscriptionById)
 				adminSubscriptionRoute.POST("/", controller.AddSubscription)
 				adminSubscriptionRoute.PUT("/:id", controller.UpdateSubscription)
 				adminSubscriptionRoute.DELETE("/:id", controller.DeleteSubscription)

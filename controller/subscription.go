@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"unicode/utf8"
@@ -26,7 +25,7 @@ func GetAllSubscriptions(c *gin.Context) {
 	common.ApiSuccess(c, pageInfo)
 }
 
-func GetSubscription(c *gin.Context) {
+func GetSubscriptionById(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
 		common.ApiError(c, err)
@@ -299,11 +298,4 @@ func GetMySubscriptionLogs(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(logs)
 	common.ApiSuccess(c, pageInfo)
-}
-
-func validateExpiredTime(expired int64) error {
-	if expired != 0 && expired < common.GetTimestamp() {
-		return errors.New("过期时间不能早于当前时间")
-	}
-	return nil
 }
