@@ -1,0 +1,151 @@
+name: Publish Docker image (beta)
+
+on:
+  push:
+    branches:
+      - beta
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "reason"
+        required: false
+
+jobs:
+  build_single_arch:
+    name: Build & push (${{ matrix.arch }}) [native]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Check out (shallow)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Determine beta version
+        id: version
+        run: |
+          VERSION="beta-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
+          echo "$VERSION" > VERSION
+          echo "value=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Publishing version: $VERSION for ${{ matrix.arch }}"
+
+      - name: Normalize GHCR repository
+        run: echo "GHCR_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            w3ng/better-new-api
+            ghcr.io/${{ env.GHCR_REPOSITORY }}
+
+      - name: Build & push single-arch (to both registries)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            w3ng/better-new-api:beta-${{ matrix.arch }}
+            w3ng/better-new-api:${{ steps.version.outputs.value }}-${{ matrix.arch }}
+            ghcr.io/${{ env.GHCR_REPOSITORY }}:beta-${{ matrix.arch }}
+            ghcr.io/${{ env.GHCR_REPOSITORY }}:${{ steps.version.outputs.value }}-${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+  create_manifests:
+    name: Create multi-arch manifests (Docker Hub + GHCR)
+    needs: [build_single_arch]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Check out (shallow)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Normalize GHCR repository
+        run: echo "GHCR_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Determine beta version
+        id: version
+        run: |
+          VERSION="beta-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
+          echo "value=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create & push manifest (Docker Hub - beta)
+        run: |
+          docker buildx imagetools create \
+            -t w3ng/better-new-api:beta \
+            w3ng/better-new-api:beta-amd64 \
+            w3ng/better-new-api:beta-arm64
+
+      - name: Create & push manifest (Docker Hub - versioned beta)
+        run: |
+          docker buildx imagetools create \
+            -t w3ng/better-new-api:${VERSION} \
+            w3ng/better-new-api:${VERSION}-amd64 \
+            w3ng/better-new-api:${VERSION}-arm64
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create & push manifest (GHCR - beta)
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/${GHCR_REPOSITORY}:beta \
+            ghcr.io/${GHCR_REPOSITORY}:beta-amd64 \
+            ghcr.io/${GHCR_REPOSITORY}:beta-arm64
+
+      - name: Create & push manifest (GHCR - versioned beta)
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/${GHCR_REPOSITORY}:${VERSION} \
+            ghcr.io/${GHCR_REPOSITORY}:${VERSION}-amd64 \
+            ghcr.io/${GHCR_REPOSITORY}:${VERSION}-arm64
