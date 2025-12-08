@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Card, Progress, Tag, Descriptions, Empty, Spin, Divider } from '@douyinfe/semi-ui';
+import { Card, Progress, Tag, Descriptions, Empty, Spin, Divider, Input, Button, Modal } from '@douyinfe/semi-ui';
+import { IconGift } from '@douyinfe/semi-icons';
 import { API } from '../helpers';
-import { showError } from '../helpers/utils';
+import { showError, showSuccess } from '../helpers/utils';
 import { StatusContext } from '../context/Status';
 
 const MySubscriptionsView = () => {
@@ -9,6 +10,10 @@ const MySubscriptionsView = () => {
   const [loading, setLoading] = useState(true);
   const [statusState] = useContext(StatusContext);
   const subscriptionPageHTML = statusState?.status?.subscription_page_html || '';
+
+  // 兑换码相关状态
+  const [redemptionCode, setRedemptionCode] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -32,6 +37,42 @@ const MySubscriptionsView = () => {
       showError('获取数据失败: ' + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 兑换订阅套餐码
+  const redeemSubscription = async (forceOverride = false) => {
+    if (redemptionCode === '') {
+      showError('请输入兑换码');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await API.post('/api/user/topup', {
+        key: redemptionCode,
+        force_override: forceOverride,
+      });
+      const { success, message, code } = res.data;
+      if (success) {
+        showSuccess('兑换成功！');
+        setRedemptionCode('');
+        fetchData(); // 刷新订阅列表
+      } else if (code === 'SUBSCRIPTION_CONFLICT') {
+        // 订阅冲突，弹窗确认
+        Modal.confirm({
+          title: '订阅冲突',
+          content: message,
+          okText: '确认覆盖',
+          cancelText: '取消',
+          onOk: () => redeemSubscription(true),
+        });
+      } else {
+        showError(message);
+      }
+    } catch (err) {
+      showError('请求失败');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -91,6 +132,7 @@ const MySubscriptionsView = () => {
       1: { text: '激活中', color: 'green' },
       2: { text: '已过期', color: 'red' },
       3: { text: '已取消', color: 'grey' },
+      4: { text: '已替换', color: 'orange' },
     };
     const config = statusMap[status] || { text: '未知', color: 'grey' };
     return <Tag color={config.color}>{config.text}</Tag>;
@@ -122,9 +164,41 @@ const MySubscriptionsView = () => {
     );
   }
 
+  // 渲染兑换码输入卡片
+  const renderRedemptionCard = () => (
+    <Card
+      title="兑换订阅套餐"
+      style={{ marginBottom: 24 }}
+      bordered
+    >
+      <div style={{ display: 'flex', gap: 12 }}>
+        <Input
+          prefix={<IconGift />}
+          placeholder="请输入订阅套餐兑换码"
+          value={redemptionCode}
+          onChange={setRedemptionCode}
+          showClear
+          style={{ flex: 1 }}
+        />
+        <Button
+          type="primary"
+          theme="solid"
+          onClick={() => redeemSubscription(false)}
+          loading={isSubmitting}
+        >
+          兑换
+        </Button>
+      </div>
+      <div style={{ marginTop: 8, fontSize: 12, color: 'var(--semi-color-text-2)' }}>
+        输入订阅套餐兑换码可激活对应的订阅服务
+      </div>
+    </Card>
+  );
+
   if (subscriptions.length === 0) {
     return (
       <div>
+        {renderRedemptionCard()}
         <Empty
           title="暂无订阅"
           description="您还没有激活任何订阅套餐"
@@ -138,6 +212,8 @@ const MySubscriptionsView = () => {
   return (
     <div>
       <h2 style={{ marginBottom: 24 }}>我的订阅</h2>
+
+      {renderRedemptionCard()}
 
       {subscriptions.map((sub) => (
         <Card

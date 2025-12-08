@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -233,6 +234,20 @@ func GetMySubscriptions(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+
+	// 如果 Redis 启用，用 Redis 数据覆盖用量字段
+	if common.RedisEnabled {
+		for _, sub := range subs {
+			if sub.SubscriptionInfo != nil {
+				quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo)
+				dailyUsed, weeklyUsed, monthlyUsed, _ := quotaRedis.GetQuotaUsed()
+				sub.DailyQuotaUsed = dailyUsed
+				sub.WeeklyQuotaUsed = weeklyUsed
+				sub.MonthlyQuotaUsed = monthlyUsed
+			}
+		}
+	}
+
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(subs)
 	common.ApiSuccess(c, pageInfo)
@@ -253,25 +268,36 @@ func GetMySubscriptionQuota(c *gin.Context) {
 		return
 	}
 
-	// 检查并重置
-	if us.CheckAndResetQuota() {
-		us.Update()
-	}
-
 	// 获取套餐信息
 	sub, _ := model.GetSubscriptionById(us.SubscriptionId)
 
+	var dailyUsed, weeklyUsed, monthlyUsed int
+
+	// 优先从 Redis 读取用量
+	if common.RedisEnabled {
+		quotaRedis := service.NewSubscriptionQuotaRedis(us.Id, sub)
+		dailyUsed, weeklyUsed, monthlyUsed, _ = quotaRedis.GetQuotaUsed()
+	} else {
+		// Redis 未启用，从数据库读取
+		if us.CheckAndResetQuota() {
+			us.Update()
+		}
+		dailyUsed = us.DailyQuotaUsed
+		weeklyUsed = us.WeeklyQuotaUsed
+		monthlyUsed = us.MonthlyQuotaUsed
+	}
+
 	data := map[string]interface{}{
 		"daily": map[string]interface{}{
-			"used":  us.DailyQuotaUsed,
+			"used":  dailyUsed,
 			"limit": sub.DailyQuotaLimit,
 		},
 		"weekly": map[string]interface{}{
-			"used":  us.WeeklyQuotaUsed,
+			"used":  weeklyUsed,
 			"limit": sub.WeeklyQuotaLimit,
 		},
 		"monthly": map[string]interface{}{
-			"used":  us.MonthlyQuotaUsed,
+			"used":  monthlyUsed,
 			"limit": sub.MonthlyQuotaLimit,
 		},
 		"expire_time": us.ExpireTime,

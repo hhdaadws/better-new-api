@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -1026,7 +1027,8 @@ func EmailBind(c *gin.Context) {
 }
 
 type topUpRequest struct {
-	Key string `json:"key"`
+	Key           string `json:"key"`
+	ForceOverride bool   `json:"force_override"` // 是否强制覆盖已有订阅
 }
 
 var topUpLocks sync.Map
@@ -1087,8 +1089,19 @@ func TopUp(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	quota, err := model.Redeem(req.Key, id)
+
+	options := model.RedeemOptions{ForceOverride: req.ForceOverride}
+	quota, err := model.RedeemWithOptions(req.Key, id, options)
 	if err != nil {
+		// 检查是否是订阅冲突错误
+		if errors.Is(err, model.ErrSubscriptionConflict) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "您已有激活的订阅套餐，是否确认覆盖？覆盖后原订阅将失效。",
+				"code":    "SUBSCRIPTION_CONFLICT",
+			})
+			return
+		}
 		common.ApiError(c, err)
 		return
 	}

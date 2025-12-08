@@ -23,6 +23,7 @@ const (
 	UserSubscriptionStatusActive   = 1 // 激活
 	UserSubscriptionStatusExpired  = 2 // 已过期
 	UserSubscriptionStatusCanceled = 3 // 已取消
+	UserSubscriptionStatusReplaced = 4 // 已被新订阅替换
 )
 
 // Subscription 订阅套餐
@@ -293,6 +294,67 @@ func (us *UserSubscription) ConsumeQuota(quota int, subscription *Subscription) 
 	return nil
 }
 
+// ReturnQuota 返还额度（请求失败时退还预扣的额度）
+func (us *UserSubscription) ReturnQuota(quota int) error {
+	if quota <= 0 {
+		return nil
+	}
+
+	tx := DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// 加锁查询
+	err := tx.Set("gorm:query_option", "FOR UPDATE").First(us, us.Id).Error
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 返还额度（减少已使用量，但不能小于0）
+	us.DailyQuotaUsed -= quota
+	if us.DailyQuotaUsed < 0 {
+		us.DailyQuotaUsed = 0
+	}
+	us.WeeklyQuotaUsed -= quota
+	if us.WeeklyQuotaUsed < 0 {
+		us.WeeklyQuotaUsed = 0
+	}
+	us.MonthlyQuotaUsed -= quota
+	if us.MonthlyQuotaUsed < 0 {
+		us.MonthlyQuotaUsed = 0
+	}
+	us.UpdatedTime = common.GetTimestamp()
+
+	err = tx.Save(us).Error
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// 提交事务
+	err = tx.Commit().Error
+	if err != nil {
+		return err
+	}
+
+	// 清除缓存
+	gopool.Go(func() {
+		CacheDeleteUserSubscription(us.UserId)
+		// 更新 Redis 缓存（负数表示返还）
+		if common.RedisEnabled {
+			CacheIncrSubscriptionQuota(us.Id, "daily", -quota)
+			CacheIncrSubscriptionQuota(us.Id, "weekly", -quota)
+			CacheIncrSubscriptionQuota(us.Id, "monthly", -quota)
+		}
+	})
+
+	return nil
+}
+
 // GetActiveUserSubscription 获取用户激活的订阅（支持指定分组）
 func GetActiveUserSubscription(userId int, group string) (*UserSubscription, *Subscription, error) {
 	// 先尝试从缓存获取
@@ -343,6 +405,51 @@ func GetActiveUserSubscription(userId int, group string) (*UserSubscription, *Su
 	return &us, sub, nil
 }
 
+// GetActiveUserSubscriptionNoGroup 获取用户激活的订阅（不检查分组）
+// 订阅额度作为用户余额的替代，不应该区分分组
+func GetActiveUserSubscriptionNoGroup(userId int) (*UserSubscription, *Subscription, error) {
+	// 先尝试从缓存获取
+	cached, err := CacheGetUserSubscription(userId)
+	if err == nil && cached != nil && cached.Status == UserSubscriptionStatusActive {
+		now := common.GetTimestamp()
+		if cached.ExpireTime > now {
+			sub, _ := GetSubscriptionById(cached.SubscriptionId)
+			if sub != nil {
+				return cached, sub, nil
+			}
+		}
+	}
+
+	// 从数据库查询
+	var us UserSubscription
+	now := common.GetTimestamp()
+	err = DB.Where("user_id = ? AND status = ? AND expire_time > ?",
+		userId, UserSubscriptionStatusActive, now).First(&us).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 检查是否过期
+	if us.ExpireTime <= now {
+		us.Status = UserSubscriptionStatusExpired
+		us.Update()
+		return nil, nil, errors.New("订阅已过期")
+	}
+
+	// 获取套餐信息
+	sub, err := GetSubscriptionById(us.SubscriptionId)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// 缓存
+	gopool.Go(func() {
+		CacheSetUserSubscription(userId, &us)
+	})
+
+	return &us, sub, nil
+}
+
 // GetUserSubscriptions 获取用户所有订阅
 func GetUserSubscriptions(userId int, startIdx int, num int) ([]*UserSubscription, int64, error) {
 	var list []*UserSubscription
@@ -374,10 +481,21 @@ func GetUserSubscriptions(userId int, startIdx int, num int) ([]*UserSubscriptio
 		return nil, 0, err
 	}
 
-	// 加载套餐信息
+	// 加载套餐信息，并检查过期状态
+	now := common.GetTimestamp()
 	for _, us := range list {
 		sub, _ := GetSubscriptionById(us.SubscriptionId)
 		us.SubscriptionInfo = sub
+
+		// 检查是否过期：如果状态是激活但已过期，更新状态
+		if us.Status == UserSubscriptionStatusActive && us.ExpireTime <= now {
+			us.Status = UserSubscriptionStatusExpired
+			// 异步更新数据库
+			gopool.Go(func() {
+				DB.Model(&UserSubscription{}).Where("id = ?", us.Id).Update("status", UserSubscriptionStatusExpired)
+				CacheDeleteUserSubscription(userId)
+			})
+		}
 	}
 
 	return list, total, nil

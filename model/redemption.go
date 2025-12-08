@@ -133,7 +133,19 @@ func GetRedemptionById(id int) (*Redemption, error) {
 	return &redemption, err
 }
 
+// ErrSubscriptionConflict 表示用户已有激活的订阅，需要确认是否覆盖
+var ErrSubscriptionConflict = errors.New("SUBSCRIPTION_CONFLICT")
+
+// RedeemOptions 兑换选项
+type RedeemOptions struct {
+	ForceOverride bool // 是否强制覆盖已有订阅
+}
+
 func Redeem(key string, userId int) (quota int, err error) {
+	return RedeemWithOptions(key, userId, RedeemOptions{ForceOverride: false})
+}
+
+func RedeemWithOptions(key string, userId int, options RedeemOptions) (quota int, err error) {
 	if key == "" {
 		return 0, errors.New("未提供兑换码")
 	}
@@ -170,8 +182,29 @@ func Redeem(key string, userId int) (quota int, err error) {
 				return errors.New("套餐已禁用")
 			}
 
-			// 创建用户订阅
 			now := common.GetTimestamp()
+
+			// 检查用户是否已有激活的订阅
+			var existingSub UserSubscription
+			existingErr := tx.Where("user_id = ? AND status = ? AND expire_time > ?",
+				userId, UserSubscriptionStatusActive, now).First(&existingSub).Error
+
+			if existingErr == nil {
+				// 用户已有激活的订阅
+				if !options.ForceOverride {
+					// 需要用户确认覆盖
+					return ErrSubscriptionConflict
+				}
+				// 用户确认覆盖，将旧订阅标记为"已替换"
+				existingSub.Status = UserSubscriptionStatusReplaced
+				if err := tx.Save(&existingSub).Error; err != nil {
+					return err
+				}
+				// 清除旧订阅的缓存
+				CacheDeleteUserSubscription(userId)
+			}
+
+			// 创建用户订阅
 			us := &UserSubscription{
 				UserId:           userId,
 				SubscriptionId:   sub.Id,
