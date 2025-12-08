@@ -12,18 +12,23 @@ import (
 )
 
 type Redemption struct {
-	Id           int            `json:"id"`
-	UserId       int            `json:"user_id"`
-	Key          string         `json:"key" gorm:"type:char(32);uniqueIndex"`
-	Status       int            `json:"status" gorm:"default:1"`
-	Name         string         `json:"name" gorm:"index"`
-	Quota        int            `json:"quota" gorm:"default:100"`
-	CreatedTime  int64          `json:"created_time" gorm:"bigint"`
-	RedeemedTime int64          `json:"redeemed_time" gorm:"bigint"`
-	Count        int            `json:"count" gorm:"-:all"` // only for api request
-	UsedUserId   int            `json:"used_user_id"`
-	DeletedAt    gorm.DeletedAt `gorm:"index"`
-	ExpiredTime  int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+	Id             int            `json:"id"`
+	UserId         int            `json:"user_id"`
+	Key            string         `json:"key" gorm:"type:char(32);uniqueIndex"`
+	Status         int            `json:"status" gorm:"default:1"`
+	Type           int            `json:"type" gorm:"default:1;index"` // 1-普通充值码，2-订阅套餐码
+	Name           string         `json:"name" gorm:"index"`
+	Quota          int            `json:"quota" gorm:"default:100"`
+	SubscriptionId *int           `json:"subscription_id" gorm:"index"` // 订阅套餐ID（type=2时有效）
+	CreatedTime    int64          `json:"created_time" gorm:"bigint"`
+	RedeemedTime   int64          `json:"redeemed_time" gorm:"bigint"`
+	Count          int            `json:"count" gorm:"-:all"` // only for api request
+	UsedUserId     int            `json:"used_user_id"`
+	DeletedAt      gorm.DeletedAt `gorm:"index"`
+	ExpiredTime    int64          `json:"expired_time" gorm:"bigint"` // 过期时间，0 表示不过期
+
+	// 关联数据（不存数据库）
+	SubscriptionInfo *Subscription `json:"subscription_info,omitempty" gorm:"-"`
 }
 
 func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total int64, err error) {
@@ -55,6 +60,14 @@ func GetAllRedemptions(startIdx int, num int) (redemptions []*Redemption, total 
 	// 提交事务
 	if err = tx.Commit().Error; err != nil {
 		return nil, 0, err
+	}
+
+	// 加载订阅信息
+	for _, r := range redemptions {
+		if r.Type == 2 && r.SubscriptionId != nil {
+			sub, _ := GetSubscriptionById(*r.SubscriptionId)
+			r.SubscriptionInfo = sub
+		}
 	}
 
 	return redemptions, total, nil
@@ -99,6 +112,14 @@ func SearchRedemptions(keyword string, startIdx int, num int) (redemptions []*Re
 		return nil, 0, err
 	}
 
+	// 加载订阅信息
+	for _, r := range redemptions {
+		if r.Type == 2 && r.SubscriptionId != nil {
+			sub, _ := GetSubscriptionById(*r.SubscriptionId)
+			r.SubscriptionInfo = sub
+		}
+	}
+
 	return redemptions, total, nil
 }
 
@@ -112,7 +133,19 @@ func GetRedemptionById(id int) (*Redemption, error) {
 	return &redemption, err
 }
 
+// ErrSubscriptionConflict 表示用户已有激活的订阅，需要确认是否覆盖
+var ErrSubscriptionConflict = errors.New("SUBSCRIPTION_CONFLICT")
+
+// RedeemOptions 兑换选项
+type RedeemOptions struct {
+	ForceOverride bool // 是否强制覆盖已有订阅
+}
+
 func Redeem(key string, userId int) (quota int, err error) {
+	return RedeemWithOptions(key, userId, RedeemOptions{ForceOverride: false})
+}
+
+func RedeemWithOptions(key string, userId int, options RedeemOptions) (quota int, err error) {
 	if key == "" {
 		return 0, errors.New("未提供兑换码")
 	}
@@ -137,6 +170,72 @@ func Redeem(key string, userId int) (quota int, err error) {
 		if redemption.ExpiredTime != 0 && redemption.ExpiredTime < common.GetTimestamp() {
 			return errors.New("该兑换码已过期")
 		}
+
+		// ========== 处理订阅套餐码 ==========
+		if redemption.Type == 2 && redemption.SubscriptionId != nil {
+			// 订阅套餐码
+			sub, err := GetSubscriptionById(*redemption.SubscriptionId)
+			if err != nil {
+				return errors.New("套餐不存在")
+			}
+			if sub.Status != SubscriptionStatusEnabled {
+				return errors.New("套餐已禁用")
+			}
+
+			now := common.GetTimestamp()
+
+			// 检查用户是否已有激活的订阅
+			var existingSub UserSubscription
+			existingErr := tx.Where("user_id = ? AND status = ? AND expire_time > ?",
+				userId, UserSubscriptionStatusActive, now).First(&existingSub).Error
+
+			if existingErr == nil {
+				// 用户已有激活的订阅
+				if !options.ForceOverride {
+					// 需要用户确认覆盖
+					return ErrSubscriptionConflict
+				}
+				// 用户确认覆盖，将旧订阅标记为"已替换"
+				existingSub.Status = UserSubscriptionStatusReplaced
+				if err := tx.Save(&existingSub).Error; err != nil {
+					return err
+				}
+				// 清除旧订阅的缓存
+				CacheDeleteUserSubscription(userId)
+			}
+
+			// 创建用户订阅
+			us := &UserSubscription{
+				UserId:           userId,
+				SubscriptionId:   sub.Id,
+				RedemptionId:     &redemption.Id,
+				Status:           UserSubscriptionStatusActive,
+				StartTime:        now,
+				ExpireTime:       now + int64(sub.DurationDays*24*3600),
+				DailyResetTime:   getTodayStart(),
+				WeeklyResetTime:  getWeekStart(),
+				MonthlyResetTime: getMonthStart(),
+			}
+
+			err = tx.Create(us).Error
+			if err != nil {
+				return err
+			}
+
+			// 标记兑换码已使用
+			redemption.RedeemedTime = now
+			redemption.Status = common.RedemptionCodeStatusUsed
+			redemption.UsedUserId = userId
+			err = tx.Save(redemption).Error
+			if err != nil {
+				return err
+			}
+
+			RecordLog(userId, LogTypeSystem, fmt.Sprintf("兑换订阅套餐：%s，有效期 %d 天", sub.Name, sub.DurationDays))
+			return nil
+		}
+
+		// ========== 原有逻辑：普通充值码 ==========
 		err = tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error
 		if err != nil {
 			return err
@@ -150,7 +249,11 @@ func Redeem(key string, userId int) (quota int, err error) {
 	if err != nil {
 		return 0, errors.New("兑换失败，" + err.Error())
 	}
-	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
+
+	if redemption.Type == 1 {
+		RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
+	}
+
 	return redemption.Quota, nil
 }
 

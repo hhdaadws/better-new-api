@@ -16,7 +16,7 @@ version: '3.4' # For compatibility with older Docker versions
 
 services:
   new-api:
-    image: calciumion/new-api:latest
+    image: w3ng/better-new-api:subscription
     container_name: new-api
     restart: always
     command: --log-dir /app/logs
@@ -81,4 +81,6 @@ services:
 
 volumes:
   pg_data:
+    external: true
+    name: new-api_pg_data
 #  mysql_data:

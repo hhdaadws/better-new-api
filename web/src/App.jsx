@@ -34,6 +34,9 @@ import PasswordResetConfirm from './components/auth/PasswordResetConfirm';
 import Channel from './pages/Channel';
 import Token from './pages/Token';
 import Redemption from './pages/Redemption';
+import Subscription from './pages/Subscription';
+import SubscriptionPageSettingPage from './pages/SubscriptionPageSetting';
+import MySubscription from './pages/MySubscription';
 import TopUp from './pages/TopUp';
 import Log from './pages/Log';
 import ErrorLog from './pages/ErrorLog';
@@ -139,6 +142,22 @@ function App() {
           element={
             <AdminRoute>
               <Redemption />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/subscription'
+          element={
+            <AdminRoute>
+              <Subscription />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/subscription-page-setting'
+          element={
+            <AdminRoute>
+              <SubscriptionPageSettingPage />
             </AdminRoute>
           }
         />
@@ -255,6 +274,14 @@ function App() {
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <TopUp />
               </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/my-subscription'
+          element={
+            <PrivateRoute>
+              <MySubscription />
             </PrivateRoute>
           }
         />

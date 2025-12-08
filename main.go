@@ -102,6 +102,17 @@ func main() {
 
 	go controller.AutomaticallyTestChannels()
 
+	// 订阅过期检查定时任务
+	go func() {
+		for {
+			time.Sleep(time.Hour) // 每小时检查一次
+			err := model.ExpireSubscriptions()
+			if err != nil {
+				common.SysLog("expire subscriptions failed: " + err.Error())
+			}
+		}
+	}()
+
 	if common.IsMasterNode && constant.UpdateTask {
 		gopool.Go(func() {
 			controller.UpdateMidjourneyTaskBulk()

@@ -42,15 +42,32 @@ func ReturnPreConsumedQuota(c *gin.Context, relayInfo *relaycommon.RelayInfo) {
 		return
 	}
 
-	// Non-free group: return pre-consumed quota via PostConsumeQuota
+	// Non-free group: return pre-consumed quota
+	// 必须返还到正确的来源（订阅额度或用户余额）
 	if relayInfo.FinalPreConsumedQuota != 0 {
 		logger.LogInfo(c, fmt.Sprintf("用户 %d 请求失败, 返还预扣费额度 %s", relayInfo.UserId, logger.FormatQuota(relayInfo.FinalPreConsumedQuota)))
 		gopool.Go(func() {
-			relayInfoCopy := *relayInfo
+			// 返还 Token 额度
+			if !relayInfo.IsPlayground {
+				err := model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, relayInfo.FinalPreConsumedQuota)
+				if err != nil {
+					common.SysLog("error return token quota: " + err.Error())
+				}
+			}
 
-			err := PostConsumeQuota(&relayInfoCopy, -relayInfoCopy.FinalPreConsumedQuota, 0, false)
-			if err != nil {
-				common.SysLog("error return pre-consumed quota: " + err.Error())
+			// 返还到预扣的来源
+			if relayInfo.SubscriptionPreConsumed {
+				// 预扣的是订阅额度，返还到订阅额度
+				err := ReturnSubscriptionQuota(relayInfo.UserId, relayInfo.FinalPreConsumedQuota)
+				if err != nil {
+					common.SysLog("error return subscription quota: " + err.Error())
+				}
+			} else {
+				// 预扣的是用户余额，返还到用户余额
+				err := model.IncreaseUserQuota(relayInfo.UserId, relayInfo.FinalPreConsumedQuota, false)
+				if err != nil {
+					common.SysLog("error return user quota: " + err.Error())
+				}
 			}
 		})
 	}
@@ -113,17 +130,22 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 		return nil
 	}
 
-	// Non-free group: exclusively use user's paid quota
-	if userQuota <= 0 {
-		return types.NewErrorWithStatusCode(
-			fmt.Errorf("用户额度不足，剩余额度: %s", logger.FormatQuota(userQuota)),
-			types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
-			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+	// Non-free group: 优先使用订阅额度，不足时降级到用户余额
+	// 订阅额度是用户余额的替代品，不区分分组
+
+	// 检查是否有可用的订阅额度（用于判断总额度是否足够）
+	hasActiveSubscription := false
+	subscriptionAvailable := false
+	if _, sub, err := model.GetActiveUserSubscriptionNoGroup(relayInfo.UserId); err == nil && sub != nil {
+		hasActiveSubscription = true
+		// 订阅存在，认为有额度可用（具体额度在预扣时检查）
+		subscriptionAvailable = true
 	}
 
-	if userQuota < preConsumedQuota {
+	// 判断总额度是否足够（订阅额度 + 用户余额）
+	if userQuota <= 0 && !subscriptionAvailable {
 		return types.NewErrorWithStatusCode(
-			fmt.Errorf("预扣费额度失败，用户剩余额度: %s，需要预扣费额度: %s", logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)),
+			fmt.Errorf("用户额度不足，剩余额度: %s", logger.FormatQuota(userQuota)),
 			types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
@@ -131,37 +153,63 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 	trustQuota := common.GetTrustQuota()
 
 	relayInfo.UserQuota = userQuota
-	if userQuota > trustQuota {
-		// 用户额度充足，判断令牌额度是否充足
+	// 如果有订阅或用户余额充足，考虑信任机制
+	if (subscriptionAvailable || userQuota > trustQuota) {
+		// 用户额度充足或有订阅，判断令牌额度是否充足
 		if !relayInfo.TokenUnlimited {
 			// 非无限令牌，判断令牌额度是否充足
 			tokenQuota := c.GetInt("token_quota")
 			if tokenQuota > trustQuota {
 				// 令牌额度充足，信任令牌
 				preConsumedQuota = 0
-				logger.LogInfo(c, fmt.Sprintf("用户 %d 剩余额度 %s 且令牌 %d 额度 %d 充足, 信任且不需要预扣费", relayInfo.UserId, logger.FormatQuota(userQuota), relayInfo.TokenId, tokenQuota))
+				logger.LogInfo(c, fmt.Sprintf("用户 %d 剩余额度 %s (订阅: %v) 且令牌 %d 额度 %d 充足, 信任且不需要预扣费",
+					relayInfo.UserId, logger.FormatQuota(userQuota), hasActiveSubscription, relayInfo.TokenId, tokenQuota))
 			}
 		} else {
 			// in this case, we do not pre-consume quota
 			// because the user has enough quota
 			preConsumedQuota = 0
-			logger.LogInfo(c, fmt.Sprintf("用户 %d 额度充足且为无限额度令牌, 信任且不需要预扣费", relayInfo.UserId))
+			logger.LogInfo(c, fmt.Sprintf("用户 %d 额度充足 (订阅: %v) 且为无限额度令牌, 信任且不需要预扣费",
+				relayInfo.UserId, hasActiveSubscription))
 		}
 	}
 
 	if preConsumedQuota > 0 {
+		// 先预扣 Token 额度
 		err := PreConsumeTokenQuota(relayInfo, preConsumedQuota)
 		if err != nil {
 			return types.NewErrorWithStatusCode(err, types.ErrorCodePreConsumeTokenQuotaFailed, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
 
-		err = model.DecreaseUserQuota(relayInfo.UserId, preConsumedQuota)
-		if err != nil {
-			return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
-		}
+		// ========== 预扣费优先级：订阅额度 > 用户余额 ==========
+		usedSubscription, _ := TryPreConsumeSubscriptionQuota(relayInfo.UserId, preConsumedQuota)
 
-		logger.LogInfo(c, fmt.Sprintf("用户 %d 预扣费 %s, 预扣费后剩余额度: %s",
-			relayInfo.UserId, logger.FormatQuota(preConsumedQuota), logger.FormatQuota(userQuota-preConsumedQuota)))
+		if usedSubscription {
+			// 成功从订阅额度预扣
+			relayInfo.SubscriptionPreConsumed = true
+			logger.LogInfo(c, fmt.Sprintf("用户 %d 从订阅额度预扣费 %s",
+				relayInfo.UserId, logger.FormatQuota(preConsumedQuota)))
+		} else {
+			// 订阅额度不足或不可用，从用户余额预扣
+			if userQuota < preConsumedQuota {
+				// Token 额度已扣，需要返还
+				model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, preConsumedQuota)
+				return types.NewErrorWithStatusCode(
+					fmt.Errorf("预扣费额度失败，用户剩余额度: %s，需要预扣费额度: %s", logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)),
+					types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+					types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+			}
+
+			err = model.DecreaseUserQuota(relayInfo.UserId, preConsumedQuota)
+			if err != nil {
+				// Token 额度已扣，需要返还
+				model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, preConsumedQuota)
+				return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+			}
+			relayInfo.SubscriptionPreConsumed = false
+			logger.LogInfo(c, fmt.Sprintf("用户 %d 从用户余额预扣费 %s, 预扣费后剩余额度: %s",
+				relayInfo.UserId, logger.FormatQuota(preConsumedQuota), logger.FormatQuota(userQuota-preConsumedQuota)))
+		}
 	}
 
 	relayInfo.FinalPreConsumedQuota = preConsumedQuota

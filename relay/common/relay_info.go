@@ -107,9 +107,10 @@ type RelayInfo struct {
 	UserQuota              int
 	RelayFormat            types.RelayFormat
 	SendResponseCount      int
-	FinalPreConsumedQuota  int  // 最终预消耗的配额
-	CheckinQuotaConsumed   int  // 签到额度消费量
-	IsClaudeBetaQuery      bool // /v1/messages?beta=true
+	FinalPreConsumedQuota    int  // 最终预消耗的配额
+	CheckinQuotaConsumed     int  // 签到额度消费量
+	SubscriptionPreConsumed  bool // 预扣费是否来自订阅额度（用于正确返还）
+	IsClaudeBetaQuery        bool // /v1/messages?beta=true
 
 	PriceData types.PriceData
 

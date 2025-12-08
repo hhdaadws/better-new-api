@@ -502,6 +502,11 @@ func PreConsumeTokenQuota(relayInfo *relaycommon.RelayInfo, quota int) error {
 }
 
 func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQuota int, sendEmail bool) (err error) {
+	// quota 是差额：实际消费 - 预扣费
+	// quota > 0 表示需要补扣
+	// quota < 0 表示需要返还
+	// quota == 0 表示刚好
+
 	// For "free" group, handle check-in quota exclusively
 	isFreeGroup := relayInfo.UsingGroup == CheckinQuotaGroup
 
@@ -518,17 +523,68 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 			return err
 		}
 	} else {
-		// Non-free group: handle user's paid quota
-		if quota > 0 {
-			err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+		// ========== 差额处理逻辑 ==========
+		// 情况1: preConsumedQuota > 0 且 SubscriptionPreConsumed == true
+		//        -> 差额从订阅额度处理（不足时降级到用户余额）
+		// 情况2: preConsumedQuota > 0 且 SubscriptionPreConsumed == false
+		//        -> 差额从用户余额处理（不能串到订阅）
+		// 情况3: preConsumedQuota == 0（信任机制，没有预扣）
+		//        -> 按正常优先级：订阅 > 用户余额
+
+		if relayInfo.FinalPreConsumedQuota == 0 {
+			// 信任机制生效，没有预扣，按正常优先级处理
+			if quota > 0 {
+				// 尝试从订阅额度扣（优先）
+				usedSubscription, _ := TryConsumeSubscriptionQuota(relayInfo, quota)
+				if !usedSubscription {
+					// 订阅额度不可用或不足，从用户余额扣
+					err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			// quota < 0 且 preConsumedQuota == 0 理论上不会发生
+			// 因为没有预扣就不存在多扣需要返还的情况
+		} else if relayInfo.SubscriptionPreConsumed {
+			// 预扣来自订阅额度，差额也从订阅额度处理
+			if quota > 0 {
+				// 需要补扣：尝试从订阅额度补扣
+				usedSubscription, _ := TryConsumeSubscriptionQuota(relayInfo, quota)
+				if !usedSubscription {
+					// 订阅额度不足，降级到用户余额
+					err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+					if err != nil {
+						return err
+					}
+				}
+			} else if quota < 0 {
+				// 需要返还到订阅额度
+				err = ReturnSubscriptionQuota(relayInfo.UserId, -quota)
+				if err != nil {
+					return err
+				}
+			}
 		} else {
-			err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)
-		}
-		if err != nil {
-			return err
+			// 预扣来自用户余额，差额也必须从用户余额处理
+			// 不能尝试从订阅扣，否则会"串味"
+			if quota > 0 {
+				// 需要补扣：只从用户余额扣
+				err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+				if err != nil {
+					return err
+				}
+			} else if quota < 0 {
+				// 需要返还到用户余额
+				err = model.IncreaseUserQuota(relayInfo.UserId, -quota, false)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
+	// Token 额度始终要扣（这是 API Key 的独立限制，与用户余额/订阅额度无关）
 	if !relayInfo.IsPlayground {
 		if quota > 0 {
 			err = model.DecreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, quota)

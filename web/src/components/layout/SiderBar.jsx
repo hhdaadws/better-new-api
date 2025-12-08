@@ -42,6 +42,8 @@ const routerMap = {
   midjourney: '/console/midjourney',
   setting: '/console/setting',
   checkin: '/console/checkin',
+  subscriptionPackages: '/console/subscription',
+  subscriptionPageSetting: '/console/subscription-page-setting',
   about: '/about',
   detail: '/console',
   pricing: '/pricing',
@@ -49,6 +51,7 @@ const routerMap = {
   models: '/console/models',
   playground: '/console/playground',
   personal: '/console/personal',
+  mySubscription: '/console/my-subscription',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -130,6 +133,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/topup',
       },
       {
+        text: t('我的订阅'),
+        itemKey: 'mySubscription',
+        to: '/my-subscription',
+      },
+      {
         text: t('个人设置'),
         itemKey: 'personal',
         to: '/personal',
@@ -188,6 +196,23 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'checkin',
         to: '/checkin',
         className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('订阅管理'),
+        itemKey: 'subscriptionManage',
+        className: isAdmin() ? '' : 'tableHiddle',
+        items: [
+          {
+            text: t('套餐管理'),
+            itemKey: 'subscriptionPackages',
+            to: '/console/subscription',
+          },
+          {
+            text: t('页面设置'),
+            itemKey: 'subscriptionPageSetting',
+            to: '/console/subscription-page-setting',
+          },
+        ],
       },
     ];
 
@@ -484,7 +509,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
                 {!collapsed && (
                   <div className='sidebar-group-label'>{t('管理员')}</div>
                 )}
-                {adminItems.map((item) => renderNavItem(item))}
+                {adminItems.map((item) => renderSubItem(item))}
               </div>
             </>
           )}

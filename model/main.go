@@ -267,6 +267,9 @@ func migrateDB() error {
 		&Setup{},
 		&TwoFA{},
 		&TwoFABackupCode{},
+		&Subscription{},
+		&UserSubscription{},
+		&SubscriptionLog{},
 	)
 	if err != nil {
 		return err
@@ -300,6 +303,9 @@ func migrateDBFast() error {
 		{&Setup{}, "Setup"},
 		{&TwoFA{}, "TwoFA"},
 		{&TwoFABackupCode{}, "TwoFABackupCode"},
+		{&Subscription{}, "Subscription"},
+		{&UserSubscription{}, "UserSubscription"},
+		{&SubscriptionLog{}, "SubscriptionLog"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))

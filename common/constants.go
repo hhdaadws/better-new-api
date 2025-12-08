@@ -15,6 +15,7 @@ var SystemName = "New API"
 var Footer = ""
 var Logo = ""
 var TopUpLink = ""
+var SubscriptionPageHTML = "" // 订阅页面自定义HTML内容
 
 // var ChatLink = ""
 // var ChatLink2 = ""
@@ -188,6 +189,11 @@ const (
 	RedemptionCodeStatusEnabled  = 1 // don't use 0, 0 is the default value!
 	RedemptionCodeStatusDisabled = 2 // also don't use 0
 	RedemptionCodeStatusUsed     = 3 // also don't use 0
+)
+
+const (
+	RedemptionTypeQuota        = 1 // 普通充值码
+	RedemptionTypeSubscription = 2 // 订阅套餐码
 )
 
 const (
