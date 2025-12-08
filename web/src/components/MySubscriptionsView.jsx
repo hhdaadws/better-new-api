@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Progress, Tag, Descriptions, Empty, Spin, message } from '@douyinfe/semi-ui';
+import React, { useState, useEffect, useContext } from 'react';
+import { Card, Progress, Tag, Descriptions, Empty, Spin, Divider } from '@douyinfe/semi-ui';
 import { API } from '../helpers';
 import { showError } from '../helpers/utils';
+import { StatusContext } from '../context/Status';
 
 const MySubscriptionsView = () => {
   const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [statusState] = useContext(StatusContext);
+  const subscriptionPageHTML = statusState?.status?.subscription_page_html || '';
 
   useEffect(() => {
     fetchData();
@@ -32,13 +35,19 @@ const MySubscriptionsView = () => {
     }
   };
 
+  // QuotaPerUnit = 500000 = $1
+  const QUOTA_PER_UNIT = 500000;
+
   const formatQuota = (quota) => {
-    if (quota >= 1000000) {
-      return `${(quota / 1000000).toFixed(2)}M`;
-    } else if (quota >= 1000) {
-      return `${(quota / 1000).toFixed(0)}K`;
+    // 将内部额度单位转换为美元显示
+    const dollars = quota / QUOTA_PER_UNIT;
+    if (dollars >= 1) {
+      return `$${dollars.toFixed(2)}`;
+    } else if (dollars >= 0.01) {
+      return `$${dollars.toFixed(2)}`;
+    } else {
+      return `$${dollars.toFixed(4)}`;
     }
-    return quota.toString();
   };
 
   const formatDate = (timestamp) => {
@@ -64,7 +73,7 @@ const MySubscriptionsView = () => {
         <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ fontWeight: 500 }}>{label}</span>
           <span>
-            {formatQuota(used)} / {formatQuota(limit)} tokens
+            {formatQuota(used)} / {formatQuota(limit)}
           </span>
         </div>
         <Progress
@@ -87,6 +96,24 @@ const MySubscriptionsView = () => {
     return <Tag color={config.color}>{config.text}</Tag>;
   };
 
+  // 渲染可订阅套餐区域
+  const renderSubscriptionPlans = () => {
+    if (!subscriptionPageHTML) return null;
+
+    return (
+      <>
+        <Divider style={{ margin: '32px 0' }} />
+        <div>
+          <h2 style={{ marginBottom: 24 }}>可订阅的套餐</h2>
+          <div
+            className="subscription-plans-content"
+            dangerouslySetInnerHTML={{ __html: subscriptionPageHTML }}
+          />
+        </div>
+      </>
+    );
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 64 }}>
@@ -97,11 +124,14 @@ const MySubscriptionsView = () => {
 
   if (subscriptions.length === 0) {
     return (
-      <Empty
-        title="暂无订阅"
-        description="您还没有激活任何订阅套餐"
-        style={{ padding: 64 }}
-      />
+      <div>
+        <Empty
+          title="暂无订阅"
+          description="您还没有激活任何订阅套餐"
+          style={{ padding: 64 }}
+        />
+        {renderSubscriptionPlans()}
+      </div>
     );
   }
 
@@ -205,6 +235,8 @@ const MySubscriptionsView = () => {
           )}
         </Card>
       ))}
+
+      {renderSubscriptionPlans()}
     </div>
   );
 };

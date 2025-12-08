@@ -75,6 +75,8 @@ import {
   Package,
   AlertTriangle,
   CalendarCheck,
+  Crown,
+  Bookmark,
 } from 'lucide-react';
 
 // 获取侧边栏Lucide图标组件
@@ -122,6 +124,13 @@ export function getLucideIcon(key, selected = false) {
       return <Settings {...commonProps} color={iconColor} />;
     case 'checkin':
       return <CalendarCheck {...commonProps} color={iconColor} />;
+    case 'subscriptionManage':
+    case 'subscriptionPackages':
+      return <Crown {...commonProps} color={iconColor} />;
+    case 'subscriptionPageSetting':
+      return <Settings {...commonProps} color={iconColor} />;
+    case 'mySubscription':
+      return <Bookmark {...commonProps} color={iconColor} />;
     default:
       return <CircleUser {...commonProps} color={iconColor} />;
   }

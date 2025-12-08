@@ -15,6 +15,7 @@ var SystemName = "New API"
 var Footer = ""
 var Logo = ""
 var TopUpLink = ""
+var SubscriptionPageHTML = "" // 订阅页面自定义HTML内容
 
 // var ChatLink = ""
 // var ChatLink2 = ""

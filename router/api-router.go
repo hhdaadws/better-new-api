@@ -129,6 +129,9 @@ func SetApiRouter(router *gin.Engine) {
 			// Check-in admin routes (签到管理)
 			optionRoute.GET("/checkin", controller.AdminGetCheckinConfig)
 			optionRoute.PUT("/checkin", controller.AdminUpdateCheckinConfig)
+
+			// Get single option by key (must be last to avoid route conflicts)
+			optionRoute.GET("/:key", controller.GetOption)
 		}
 		ratioSyncRoute := apiRouter.Group("/ratio_sync")
 		ratioSyncRoute.Use(middleware.RootAuth())

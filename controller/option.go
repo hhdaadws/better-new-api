@@ -37,6 +37,45 @@ func GetOptions(c *gin.Context) {
 	return
 }
 
+func GetOption(c *gin.Context) {
+	key := c.Param("key")
+	if key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "key is required",
+		})
+		return
+	}
+
+	// 安全检查：不允许获取敏感配置
+	if strings.HasSuffix(key, "Token") || strings.HasSuffix(key, "Secret") || strings.HasSuffix(key, "Key") {
+		c.JSON(http.StatusForbidden, gin.H{
+			"success": false,
+			"message": "access denied",
+		})
+		return
+	}
+
+	common.OptionMapRWMutex.RLock()
+	value, exists := common.OptionMap[key]
+	common.OptionMapRWMutex.RUnlock()
+
+	if !exists {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "",
+			"data":    "",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    common.Interface2String(value),
+	})
+}
+
 type OptionUpdateRequest struct {
 	Key   string `json:"key"`
 	Value any    `json:"value"`

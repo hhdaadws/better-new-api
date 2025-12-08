@@ -35,6 +35,7 @@ import Channel from './pages/Channel';
 import Token from './pages/Token';
 import Redemption from './pages/Redemption';
 import Subscription from './pages/Subscription';
+import SubscriptionPageSettingPage from './pages/SubscriptionPageSetting';
 import MySubscription from './pages/MySubscription';
 import TopUp from './pages/TopUp';
 import Log from './pages/Log';
@@ -149,6 +150,14 @@ function App() {
           element={
             <AdminRoute>
               <Subscription />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/subscription-page-setting'
+          element={
+            <AdminRoute>
+              <SubscriptionPageSettingPage />
             </AdminRoute>
           }
         />

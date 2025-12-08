@@ -11,6 +11,7 @@ const SubscriptionsTable = () => {
   const [editingId, setEditingId] = useState(null);
   const [currentSubscription, setCurrentSubscription] = useState(null);
   const [redemptionKeys, setRedemptionKeys] = useState([]);
+  const [groupOptions, setGroupOptions] = useState([]);
   const formApi = React.useRef();
   const redemptionFormApi = React.useRef();
 
@@ -113,7 +114,24 @@ const SubscriptionsTable = () => {
 
   useEffect(() => {
     fetchData();
+    fetchGroups();
   }, []);
+
+  const fetchGroups = async () => {
+    try {
+      const res = await API.get('/api/group/');
+      if (res.data.success) {
+        setGroupOptions(
+          res.data.data.map((group) => ({
+            label: group,
+            value: group,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('获取分组失败:', error);
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -136,14 +154,28 @@ const SubscriptionsTable = () => {
     }
   };
 
+  // QuotaPerUnit = 500000 = $1
+  const QUOTA_PER_UNIT = 500000;
+
   const formatQuota = (quota) => {
-    // 简化显示：1000 tokens = 1K, 1000000 = 1M
-    if (quota >= 1000000) {
-      return `${(quota / 1000000).toFixed(1)}M tokens`;
-    } else if (quota >= 1000) {
-      return `${(quota / 1000).toFixed(0)}K tokens`;
+    // 将内部额度单位转换为美元显示
+    const dollars = quota / QUOTA_PER_UNIT;
+    if (dollars >= 1) {
+      return `$${dollars.toFixed(2)}`;
+    } else {
+      // 小于1美元时显示更多小数位
+      return `$${dollars.toFixed(4)}`;
     }
-    return `${quota} tokens`;
+  };
+
+  // 将美元转换为内部额度单位
+  const dollarsToQuota = (dollars) => {
+    return Math.round(dollars * QUOTA_PER_UNIT);
+  };
+
+  // 将内部额度单位转换为美元
+  const quotaToDollars = (quota) => {
+    return quota / QUOTA_PER_UNIT;
   };
 
   const handleAdd = () => {
@@ -157,6 +189,10 @@ const SubscriptionsTable = () => {
     formApi.current?.setValues({
       ...record,
       allowed_groups: JSON.parse(record.allowed_groups),
+      // 将内部额度单位转换为美元用于表单显示
+      daily_quota_limit: quotaToDollars(record.daily_quota_limit),
+      weekly_quota_limit: quotaToDollars(record.weekly_quota_limit),
+      monthly_quota_limit: quotaToDollars(record.monthly_quota_limit),
     });
     setModalVisible(true);
   };
@@ -178,6 +214,10 @@ const SubscriptionsTable = () => {
   const handleSubmit = async (values) => {
     try {
       values.allowed_groups = JSON.stringify(values.allowed_groups);
+      // 将美元转换为内部额度单位
+      values.daily_quota_limit = dollarsToQuota(values.daily_quota_limit || 0);
+      values.weekly_quota_limit = dollarsToQuota(values.weekly_quota_limit || 0);
+      values.monthly_quota_limit = dollarsToQuota(values.monthly_quota_limit || 0);
 
       if (editingId) {
         values.id = editingId;
@@ -289,8 +329,11 @@ const SubscriptionsTable = () => {
             label="每日限额"
             initValue={0}
             min={0}
-            suffix="tokens"
+            step={0.1}
+            precision={2}
+            prefix="$"
             placeholder="0表示不限制"
+            extraText="输入美元金额，0表示不限制每日使用"
             style={{ width: '100%' }}
           />
           <Form.InputNumber
@@ -298,16 +341,22 @@ const SubscriptionsTable = () => {
             label="每周限额"
             initValue={0}
             min={0}
-            suffix="tokens"
+            step={0.1}
+            precision={2}
+            prefix="$"
             placeholder="0表示不限制"
+            extraText="输入美元金额，0表示不限制每周使用"
             style={{ width: '100%' }}
           />
           <Form.InputNumber
             field="monthly_quota_limit"
             label="每月限额"
             rules={[{ required: true, message: '请输入每月限额' }]}
-            min={1}
-            suffix="tokens"
+            min={0.01}
+            step={1}
+            precision={2}
+            prefix="$"
+            extraText="输入美元金额，这是套餐的总费用额度"
             style={{ width: '100%' }}
           />
           <Form.InputNumber
@@ -325,13 +374,9 @@ const SubscriptionsTable = () => {
             filter
             rules={[{ required: true, message: '请选择至少一个分组' }]}
             placeholder="选择可以使用此套餐的分组"
+            optionList={groupOptions}
             style={{ width: '100%' }}
-          >
-            <Select.Option value="default">default</Select.Option>
-            <Select.Option value="premium">premium</Select.Option>
-            <Select.Option value="vip">vip</Select.Option>
-            <Select.Option value="free">free</Select.Option>
-          </Form.Select>
+          />
           <Form.Select
             field="status"
             label="状态"

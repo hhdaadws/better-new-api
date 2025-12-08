@@ -55,6 +55,7 @@ export const useSidebar = () => {
     personal: {
       enabled: true,
       topup: true,
+      mySubscription: true,
       personal: true,
     },
     admin: {
@@ -66,6 +67,9 @@ export const useSidebar = () => {
       errorLog: true,
       setting: true,
       checkin: true,
+      subscriptionManage: true,
+      subscriptionPackages: true,
+      subscriptionPageSetting: true,
     },
   };
 
