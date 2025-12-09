@@ -14,7 +14,7 @@ import (
 // Key format: subscription:quota:{userSubscriptionId}:{period}:{periodKey}
 // Example: subscription:quota:123:daily:2024-01-15
 //          subscription:quota:123:weekly:2024-W03
-//          subscription:quota:123:monthly:2024-01
+//          subscription:quota:123:total:total (不重置，订阅期内累计)
 const (
 	SubscriptionQuotaKeyPrefix = "subscription:quota:"
 )
@@ -24,8 +24,8 @@ func GetSubscriptionQuotaKey(userSubscriptionId int, period string, periodKey st
 	return fmt.Sprintf("%s%d:%s:%s", SubscriptionQuotaKeyPrefix, userSubscriptionId, period, periodKey)
 }
 
-// GetCurrentPeriodKeys returns the current period keys for daily, weekly, and monthly quotas
-func GetCurrentPeriodKeys() (daily, weekly, monthly string) {
+// GetCurrentPeriodKeys returns the current period keys for daily, weekly, and total quotas
+func GetCurrentPeriodKeys() (daily, weekly, total string) {
 	now := GetSingaporeNow()
 
 	// Daily: YYYY-MM-DD
@@ -35,8 +35,8 @@ func GetCurrentPeriodKeys() (daily, weekly, monthly string) {
 	year, week := now.ISOWeek()
 	weekly = fmt.Sprintf("%d-W%02d", year, week)
 
-	// Monthly: YYYY-MM
-	monthly = now.Format("2006-01")
+	// Total: 固定值，不会变化，不会重置
+	total = "total"
 
 	return
 }
@@ -60,10 +60,9 @@ func GetTTLForPeriod(period string) time.Duration {
 		nextMonday := time.Date(now.Year(), now.Month(), now.Day()+daysToMonday, 0, 0, 0, 0, SingaporeLocation)
 		return nextMonday.Sub(now)
 
-	case "monthly":
-		// Until 1st of next month 00:00 Singapore time
-		nextMonth := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, SingaporeLocation)
-		return nextMonth.Sub(now)
+	case "total":
+		// 总限额不过期，设置一个很长的 TTL（365天），订阅到期时由系统清理
+		return 365 * 24 * time.Hour
 
 	default:
 		return 24 * time.Hour // Default to 1 day
@@ -85,35 +84,35 @@ func NewSubscriptionQuotaRedis(userSubscriptionId int, subscription *model.Subsc
 }
 
 // GetQuotaUsed returns the current quota used for each period from Redis
-// Returns (dailyUsed, weeklyUsed, monthlyUsed, error)
+// Returns (dailyUsed, weeklyUsed, totalUsed, error)
 func (s *SubscriptionQuotaRedis) GetQuotaUsed() (int, int, int, error) {
 	if !common.RedisEnabled {
 		return 0, 0, 0, fmt.Errorf("Redis is not enabled")
 	}
 
 	ctx := context.Background()
-	daily, weekly, monthly := GetCurrentPeriodKeys()
+	daily, weekly, total := GetCurrentPeriodKeys()
 
 	// Get all quota values in parallel using pipeline
 	pipe := common.RDB.Pipeline()
 
 	dailyCmd := pipe.Get(ctx, GetSubscriptionQuotaKey(s.UserSubscriptionId, "daily", daily))
 	weeklyCmd := pipe.Get(ctx, GetSubscriptionQuotaKey(s.UserSubscriptionId, "weekly", weekly))
-	monthlyCmd := pipe.Get(ctx, GetSubscriptionQuotaKey(s.UserSubscriptionId, "monthly", monthly))
+	totalCmd := pipe.Get(ctx, GetSubscriptionQuotaKey(s.UserSubscriptionId, "total", total))
 
 	_, _ = pipe.Exec(ctx) // Ignore errors, keys may not exist
 
 	dailyUsed, _ := strconv.Atoi(dailyCmd.Val())
 	weeklyUsed, _ := strconv.Atoi(weeklyCmd.Val())
-	monthlyUsed, _ := strconv.Atoi(monthlyCmd.Val())
+	totalUsed, _ := strconv.Atoi(totalCmd.Val())
 
-	return dailyUsed, weeklyUsed, monthlyUsed, nil
+	return dailyUsed, weeklyUsed, totalUsed, nil
 }
 
 // CheckQuotaAvailable checks if there's enough quota available for all periods
 // Returns nil if available, error with reason if not
 func (s *SubscriptionQuotaRedis) CheckQuotaAvailable(quota int) error {
-	dailyUsed, weeklyUsed, monthlyUsed, err := s.GetQuotaUsed()
+	dailyUsed, weeklyUsed, totalUsed, err := s.GetQuotaUsed()
 	if err != nil {
 		return err
 	}
@@ -130,10 +129,10 @@ func (s *SubscriptionQuotaRedis) CheckQuotaAvailable(quota int) error {
 			weeklyUsed, quota, s.Subscription.WeeklyQuotaLimit)
 	}
 
-	// Check monthly limit
-	if s.Subscription.MonthlyQuotaLimit > 0 && monthlyUsed+quota > s.Subscription.MonthlyQuotaLimit {
-		return fmt.Errorf("超出每月订阅限额（已用: %d, 需要: %d, 限额: %d）",
-			monthlyUsed, quota, s.Subscription.MonthlyQuotaLimit)
+	// Check total limit
+	if s.Subscription.TotalQuotaLimit > 0 && totalUsed+quota > s.Subscription.TotalQuotaLimit {
+		return fmt.Errorf("超出订阅总限额（已用: %d, 需要: %d, 限额: %d）",
+			totalUsed, quota, s.Subscription.TotalQuotaLimit)
 	}
 
 	return nil
@@ -156,26 +155,26 @@ func (s *SubscriptionQuotaRedis) ConsumeQuota(quota int) error {
 	}
 
 	ctx := context.Background()
-	daily, weekly, monthly := GetCurrentPeriodKeys()
+	daily, weekly, total := GetCurrentPeriodKeys()
 
 	// Use Lua script for atomic check-and-increment
 	// This ensures we don't exceed limits between check and consume
 	script := `
 		local dailyKey = KEYS[1]
 		local weeklyKey = KEYS[2]
-		local monthlyKey = KEYS[3]
+		local totalKey = KEYS[3]
 		local quota = tonumber(ARGV[1])
 		local dailyLimit = tonumber(ARGV[2])
 		local weeklyLimit = tonumber(ARGV[3])
-		local monthlyLimit = tonumber(ARGV[4])
+		local totalLimit = tonumber(ARGV[4])
 		local dailyTTL = tonumber(ARGV[5])
 		local weeklyTTL = tonumber(ARGV[6])
-		local monthlyTTL = tonumber(ARGV[7])
+		local totalTTL = tonumber(ARGV[7])
 
 		-- Get current values (0 if not exists)
 		local dailyUsed = tonumber(redis.call('GET', dailyKey) or '0')
 		local weeklyUsed = tonumber(redis.call('GET', weeklyKey) or '0')
-		local monthlyUsed = tonumber(redis.call('GET', monthlyKey) or '0')
+		local totalUsed = tonumber(redis.call('GET', totalKey) or '0')
 
 		-- Check limits (0 means no limit)
 		if dailyLimit > 0 and dailyUsed + quota > dailyLimit then
@@ -184,14 +183,14 @@ func (s *SubscriptionQuotaRedis) ConsumeQuota(quota int) error {
 		if weeklyLimit > 0 and weeklyUsed + quota > weeklyLimit then
 			return {'weekly', weeklyUsed, weeklyLimit}
 		end
-		if monthlyLimit > 0 and monthlyUsed + quota > monthlyLimit then
-			return {'monthly', monthlyUsed, monthlyLimit}
+		if totalLimit > 0 and totalUsed + quota > totalLimit then
+			return {'total', totalUsed, totalLimit}
 		end
 
 		-- Increment all counters atomically
 		local newDaily = redis.call('INCRBY', dailyKey, quota)
 		local newWeekly = redis.call('INCRBY', weeklyKey, quota)
-		local newMonthly = redis.call('INCRBY', monthlyKey, quota)
+		local newTotal = redis.call('INCRBY', totalKey, quota)
 
 		-- Set TTL if key was just created (TTL returns -1 for new keys)
 		if redis.call('TTL', dailyKey) == -1 then
@@ -200,30 +199,30 @@ func (s *SubscriptionQuotaRedis) ConsumeQuota(quota int) error {
 		if redis.call('TTL', weeklyKey) == -1 then
 			redis.call('EXPIRE', weeklyKey, weeklyTTL)
 		end
-		if redis.call('TTL', monthlyKey) == -1 then
-			redis.call('EXPIRE', monthlyKey, monthlyTTL)
+		if redis.call('TTL', totalKey) == -1 then
+			redis.call('EXPIRE', totalKey, totalTTL)
 		end
 
-		return {'ok', newDaily, newWeekly, newMonthly}
+		return {'ok', newDaily, newWeekly, newTotal}
 	`
 
 	dailyKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "daily", daily)
 	weeklyKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "weekly", weekly)
-	monthlyKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "monthly", monthly)
+	totalKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "total", total)
 
 	dailyTTL := int64(GetTTLForPeriod("daily").Seconds())
 	weeklyTTL := int64(GetTTLForPeriod("weekly").Seconds())
-	monthlyTTL := int64(GetTTLForPeriod("monthly").Seconds())
+	totalTTL := int64(GetTTLForPeriod("total").Seconds())
 
 	result, err := common.RDB.Eval(ctx, script,
-		[]string{dailyKey, weeklyKey, monthlyKey},
+		[]string{dailyKey, weeklyKey, totalKey},
 		quota,
 		s.Subscription.DailyQuotaLimit,
 		s.Subscription.WeeklyQuotaLimit,
-		s.Subscription.MonthlyQuotaLimit,
+		s.Subscription.TotalQuotaLimit,
 		dailyTTL,
 		weeklyTTL,
-		monthlyTTL,
+		totalTTL,
 	).Result()
 
 	if err != nil {
@@ -264,23 +263,23 @@ func (s *SubscriptionQuotaRedis) ReturnQuota(quota int) error {
 	}
 
 	ctx := context.Background()
-	daily, weekly, monthly := GetCurrentPeriodKeys()
+	daily, weekly, total := GetCurrentPeriodKeys()
 
 	// Use Lua script for atomic decrement with floor at 0
 	script := `
 		local dailyKey = KEYS[1]
 		local weeklyKey = KEYS[2]
-		local monthlyKey = KEYS[3]
+		local totalKey = KEYS[3]
 		local quota = tonumber(ARGV[1])
 
 		-- Decrement but don't go below 0
 		local dailyUsed = tonumber(redis.call('GET', dailyKey) or '0')
 		local weeklyUsed = tonumber(redis.call('GET', weeklyKey) or '0')
-		local monthlyUsed = tonumber(redis.call('GET', monthlyKey) or '0')
+		local totalUsed = tonumber(redis.call('GET', totalKey) or '0')
 
 		local newDaily = math.max(0, dailyUsed - quota)
 		local newWeekly = math.max(0, weeklyUsed - quota)
-		local newMonthly = math.max(0, monthlyUsed - quota)
+		local newTotal = math.max(0, totalUsed - quota)
 
 		-- Only update if key exists (has TTL)
 		if redis.call('TTL', dailyKey) > 0 then
@@ -289,19 +288,19 @@ func (s *SubscriptionQuotaRedis) ReturnQuota(quota int) error {
 		if redis.call('TTL', weeklyKey) > 0 then
 			redis.call('SET', weeklyKey, newWeekly, 'KEEPTTL')
 		end
-		if redis.call('TTL', monthlyKey) > 0 then
-			redis.call('SET', monthlyKey, newMonthly, 'KEEPTTL')
+		if redis.call('TTL', totalKey) > 0 then
+			redis.call('SET', totalKey, newTotal, 'KEEPTTL')
 		end
 
-		return {newDaily, newWeekly, newMonthly}
+		return {newDaily, newWeekly, newTotal}
 	`
 
 	dailyKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "daily", daily)
 	weeklyKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "weekly", weekly)
-	monthlyKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "monthly", monthly)
+	totalKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "total", total)
 
 	_, err := common.RDB.Eval(ctx, script,
-		[]string{dailyKey, weeklyKey, monthlyKey},
+		[]string{dailyKey, weeklyKey, totalKey},
 		quota,
 	).Result()
 
@@ -324,14 +323,13 @@ type SubscriptionQuotaStatus struct {
 	WeeklyRemaining int   `json:"weekly_remaining"`
 	WeeklyExpiresAt int64 `json:"weekly_expires_at"`
 
-	MonthlyUsed      int   `json:"monthly_used"`
-	MonthlyLimit     int   `json:"monthly_limit"`
-	MonthlyRemaining int   `json:"monthly_remaining"`
-	MonthlyExpiresAt int64 `json:"monthly_expires_at"`
+	TotalUsed      int   `json:"total_used"`
+	TotalLimit     int   `json:"total_limit"`
+	TotalRemaining int   `json:"total_remaining"`
 }
 
 func (s *SubscriptionQuotaRedis) GetQuotaStatus() (*SubscriptionQuotaStatus, error) {
-	dailyUsed, weeklyUsed, monthlyUsed, err := s.GetQuotaUsed()
+	dailyUsed, weeklyUsed, totalUsed, err := s.GetQuotaUsed()
 	if err != nil {
 		return nil, err
 	}
@@ -343,8 +341,8 @@ func (s *SubscriptionQuotaRedis) GetQuotaStatus() (*SubscriptionQuotaStatus, err
 		DailyLimit:  s.Subscription.DailyQuotaLimit,
 		WeeklyUsed:  weeklyUsed,
 		WeeklyLimit: s.Subscription.WeeklyQuotaLimit,
-		MonthlyUsed: monthlyUsed,
-		MonthlyLimit: s.Subscription.MonthlyQuotaLimit,
+		TotalUsed:   totalUsed,
+		TotalLimit:  s.Subscription.TotalQuotaLimit,
 	}
 
 	// Calculate remaining
@@ -360,17 +358,16 @@ func (s *SubscriptionQuotaRedis) GetQuotaStatus() (*SubscriptionQuotaStatus, err
 			status.WeeklyRemaining = 0
 		}
 	}
-	if s.Subscription.MonthlyQuotaLimit > 0 {
-		status.MonthlyRemaining = s.Subscription.MonthlyQuotaLimit - monthlyUsed
-		if status.MonthlyRemaining < 0 {
-			status.MonthlyRemaining = 0
+	if s.Subscription.TotalQuotaLimit > 0 {
+		status.TotalRemaining = s.Subscription.TotalQuotaLimit - totalUsed
+		if status.TotalRemaining < 0 {
+			status.TotalRemaining = 0
 		}
 	}
 
 	// Calculate expiration times
 	status.DailyExpiresAt = now.Add(GetTTLForPeriod("daily")).Unix()
 	status.WeeklyExpiresAt = now.Add(GetTTLForPeriod("weekly")).Unix()
-	status.MonthlyExpiresAt = now.Add(GetTTLForPeriod("monthly")).Unix()
 
 	return status, nil
 }

@@ -47,8 +47,8 @@ const SubscriptionsTable = () => {
       render: (value) => value === 0 ? <Tag color="green">不限制</Tag> : formatQuota(value),
     },
     {
-      title: '每月限额',
-      dataIndex: 'monthly_quota_limit',
+      title: '总限额',
+      dataIndex: 'total_quota_limit',
       width: 120,
       render: (value) => formatQuota(value),
     },
@@ -192,7 +192,7 @@ const SubscriptionsTable = () => {
       // 将内部额度单位转换为美元用于表单显示
       daily_quota_limit: quotaToDollars(record.daily_quota_limit),
       weekly_quota_limit: quotaToDollars(record.weekly_quota_limit),
-      monthly_quota_limit: quotaToDollars(record.monthly_quota_limit),
+      total_quota_limit: quotaToDollars(record.total_quota_limit),
     });
     setModalVisible(true);
   };
@@ -217,7 +217,7 @@ const SubscriptionsTable = () => {
       // 将美元转换为内部额度单位
       values.daily_quota_limit = dollarsToQuota(values.daily_quota_limit || 0);
       values.weekly_quota_limit = dollarsToQuota(values.weekly_quota_limit || 0);
-      values.monthly_quota_limit = dollarsToQuota(values.monthly_quota_limit || 0);
+      values.total_quota_limit = dollarsToQuota(values.total_quota_limit || 0);
 
       if (editingId) {
         values.id = editingId;
@@ -349,14 +349,14 @@ const SubscriptionsTable = () => {
             style={{ width: '100%' }}
           />
           <Form.InputNumber
-            field="monthly_quota_limit"
-            label="每月限额"
-            rules={[{ required: true, message: '请输入每月限额' }]}
+            field="total_quota_limit"
+            label="总限额"
+            rules={[{ required: true, message: '请输入总限额' }]}
             min={0.01}
             step={1}
             precision={2}
             prefix="$"
-            extraText="输入美元金额，这是套餐的总费用额度"
+            extraText="输入美元金额，这是套餐的总费用额度（订阅期内不重置）"
             style={{ width: '100%' }}
           />
           <Form.InputNumber

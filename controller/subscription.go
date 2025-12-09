@@ -60,10 +60,10 @@ func AddSubscription(c *gin.Context) {
 		})
 		return
 	}
-	if sub.MonthlyQuotaLimit <= 0 {
+	if sub.TotalQuotaLimit <= 0 {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "月度限额必须大于0",
+			"message": "总限额必须大于0",
 		})
 		return
 	}
@@ -239,10 +239,10 @@ func GetMySubscriptions(c *gin.Context) {
 	for _, sub := range subs {
 		if sub.SubscriptionInfo != nil {
 			quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo)
-			dailyUsed, weeklyUsed, monthlyUsed, _ := quotaRedis.GetQuotaUsed()
+			dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 			sub.DailyQuotaUsed = dailyUsed
 			sub.WeeklyQuotaUsed = weeklyUsed
-			sub.MonthlyQuotaUsed = monthlyUsed
+			sub.TotalQuotaUsed = totalUsed
 		}
 	}
 
@@ -271,7 +271,7 @@ func GetMySubscriptionQuota(c *gin.Context) {
 
 	// 从 Redis 读取用量
 	quotaRedis := service.NewSubscriptionQuotaRedis(us.Id, sub)
-	dailyUsed, weeklyUsed, monthlyUsed, _ := quotaRedis.GetQuotaUsed()
+	dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 
 	data := map[string]interface{}{
 		"daily": map[string]interface{}{
@@ -282,9 +282,9 @@ func GetMySubscriptionQuota(c *gin.Context) {
 			"used":  weeklyUsed,
 			"limit": sub.WeeklyQuotaLimit,
 		},
-		"monthly": map[string]interface{}{
-			"used":  monthlyUsed,
-			"limit": sub.MonthlyQuotaLimit,
+		"total": map[string]interface{}{
+			"used":  totalUsed,
+			"limit": sub.TotalQuotaLimit,
 		},
 		"expire_time": us.ExpireTime,
 		"status":      us.Status,
