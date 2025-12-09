@@ -113,7 +113,7 @@ const TopUp = () => {
         showSuccess(t('兑换成功！'));
         Modal.success({
           title: t('兑换成功！'),
-          content: t('成功兑换额度：') + renderQuota(data),
+          content: t('成功兑换额度：') + renderQuota(data) + '\n\n' + t('新额度将在约2分钟内生效'),
           centered: true,
         });
         if (userState.user) {

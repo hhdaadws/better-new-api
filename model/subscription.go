@@ -42,25 +42,24 @@ type Subscription struct {
 }
 
 // UserSubscription 用户订阅
+// 注意：用量数据存储在 Redis 中，不在数据库
 type UserSubscription struct {
-	Id               int    `json:"id"`
-	UserId           int    `json:"user_id" gorm:"index"`
-	SubscriptionId   int    `json:"subscription_id" gorm:"index"`
-	RedemptionId     *int   `json:"redemption_id"`
-	Status           int    `json:"status" gorm:"default:1;index"`
-	StartTime        int64  `json:"start_time" gorm:"bigint"`
-	ExpireTime       int64  `json:"expire_time" gorm:"bigint;index"`
-	DailyQuotaUsed   int    `json:"daily_quota_used" gorm:"default:0"`
-	WeeklyQuotaUsed  int    `json:"weekly_quota_used" gorm:"default:0"`
-	MonthlyQuotaUsed int    `json:"monthly_quota_used" gorm:"default:0"`
-	DailyResetTime   int64  `json:"daily_reset_time" gorm:"bigint"`
-	WeeklyResetTime  int64  `json:"weekly_reset_time" gorm:"bigint"`
-	MonthlyResetTime int64  `json:"monthly_reset_time" gorm:"bigint"`
-	CreatedTime      int64  `json:"created_time" gorm:"bigint"`
-	UpdatedTime      int64  `json:"updated_time" gorm:"bigint"`
+	Id             int   `json:"id"`
+	UserId         int   `json:"user_id" gorm:"index"`
+	SubscriptionId int   `json:"subscription_id" gorm:"index"`
+	RedemptionId   *int  `json:"redemption_id"`
+	Status         int   `json:"status" gorm:"default:1;index"`
+	StartTime      int64 `json:"start_time" gorm:"bigint"`
+	ExpireTime     int64 `json:"expire_time" gorm:"bigint;index"`
+	CreatedTime    int64 `json:"created_time" gorm:"bigint"`
+	UpdatedTime    int64 `json:"updated_time" gorm:"bigint"`
 
-	// 关联数据（不存数据库）
+	// 关联数据（不存数据库，用于 API 返回）
 	SubscriptionInfo *Subscription `json:"subscription_info,omitempty" gorm:"-"`
+	// Redis 用量数据（不存数据库，用于 API 返回）
+	DailyQuotaUsed   int `json:"daily_quota_used" gorm:"-"`
+	WeeklyQuotaUsed  int `json:"weekly_quota_used" gorm:"-"`
+	MonthlyQuotaUsed int `json:"monthly_quota_used" gorm:"-"`
 }
 
 // SubscriptionLog 订阅额度使用日志
@@ -188,171 +187,6 @@ func (us *UserSubscription) Update() error {
 		})
 	}
 	return err
-}
-
-// CheckAndResetQuota 检查并重置过期的额度
-func (us *UserSubscription) CheckAndResetQuota() bool {
-	now := time.Now()
-	needsUpdate := false
-
-	// 每日重置（当天0点）
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
-	if us.DailyResetTime < todayStart {
-		us.DailyQuotaUsed = 0
-		us.DailyResetTime = todayStart
-		needsUpdate = true
-	}
-
-	// 每周重置（周一0点）
-	weekday := int(now.Weekday())
-	if weekday == 0 {
-		weekday = 7 // Sunday = 7
-	}
-	daysToMonday := weekday - 1
-	weekStart := time.Date(now.Year(), now.Month(), now.Day()-daysToMonday, 0, 0, 0, 0, now.Location()).Unix()
-	if us.WeeklyResetTime < weekStart {
-		us.WeeklyQuotaUsed = 0
-		us.WeeklyResetTime = weekStart
-		needsUpdate = true
-	}
-
-	// 每月重置（1号0点）
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
-	if us.MonthlyResetTime < monthStart {
-		us.MonthlyQuotaUsed = 0
-		us.MonthlyResetTime = monthStart
-		needsUpdate = true
-	}
-
-	return needsUpdate
-}
-
-// ConsumeQuota 消费额度（带事务和锁）
-func (us *UserSubscription) ConsumeQuota(quota int, subscription *Subscription) error {
-	tx := DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// 加锁查询
-	err := tx.Set("gorm:query_option", "FOR UPDATE").First(us, us.Id).Error
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	// 检查并重置
-	if us.CheckAndResetQuota() {
-		// 重置时间已更新，需要保存
-	}
-
-	// 检查三个维度限额
-	if subscription.DailyQuotaLimit > 0 && us.DailyQuotaUsed+quota > subscription.DailyQuotaLimit {
-		tx.Rollback()
-		return errors.New("超出每日订阅限额")
-	}
-	if subscription.WeeklyQuotaLimit > 0 && us.WeeklyQuotaUsed+quota > subscription.WeeklyQuotaLimit {
-		tx.Rollback()
-		return errors.New("超出每周订阅限额")
-	}
-	if subscription.MonthlyQuotaLimit > 0 && us.MonthlyQuotaUsed+quota > subscription.MonthlyQuotaLimit {
-		tx.Rollback()
-		return errors.New("超出每月订阅限额")
-	}
-
-	// 消费额度
-	us.DailyQuotaUsed += quota
-	us.WeeklyQuotaUsed += quota
-	us.MonthlyQuotaUsed += quota
-	us.UpdatedTime = common.GetTimestamp()
-
-	err = tx.Save(us).Error
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	// 提交事务
-	err = tx.Commit().Error
-	if err != nil {
-		return err
-	}
-
-	// 清除缓存
-	gopool.Go(func() {
-		CacheDeleteUserSubscription(us.UserId)
-		// 更新 Redis 缓存
-		if common.RedisEnabled {
-			CacheIncrSubscriptionQuota(us.Id, "daily", quota)
-			CacheIncrSubscriptionQuota(us.Id, "weekly", quota)
-			CacheIncrSubscriptionQuota(us.Id, "monthly", quota)
-		}
-	})
-
-	return nil
-}
-
-// ReturnQuota 返还额度（请求失败时退还预扣的额度）
-func (us *UserSubscription) ReturnQuota(quota int) error {
-	if quota <= 0 {
-		return nil
-	}
-
-	tx := DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// 加锁查询
-	err := tx.Set("gorm:query_option", "FOR UPDATE").First(us, us.Id).Error
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	// 返还额度（减少已使用量，但不能小于0）
-	us.DailyQuotaUsed -= quota
-	if us.DailyQuotaUsed < 0 {
-		us.DailyQuotaUsed = 0
-	}
-	us.WeeklyQuotaUsed -= quota
-	if us.WeeklyQuotaUsed < 0 {
-		us.WeeklyQuotaUsed = 0
-	}
-	us.MonthlyQuotaUsed -= quota
-	if us.MonthlyQuotaUsed < 0 {
-		us.MonthlyQuotaUsed = 0
-	}
-	us.UpdatedTime = common.GetTimestamp()
-
-	err = tx.Save(us).Error
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-
-	// 提交事务
-	err = tx.Commit().Error
-	if err != nil {
-		return err
-	}
-
-	// 清除缓存
-	gopool.Go(func() {
-		CacheDeleteUserSubscription(us.UserId)
-		// 更新 Redis 缓存（负数表示返还）
-		if common.RedisEnabled {
-			CacheIncrSubscriptionQuota(us.Id, "daily", -quota)
-			CacheIncrSubscriptionQuota(us.Id, "weekly", -quota)
-			CacheIncrSubscriptionQuota(us.Id, "monthly", -quota)
-		}
-	})
-
-	return nil
 }
 
 // GetActiveUserSubscription 获取用户激活的订阅（支持指定分组）
@@ -559,28 +393,6 @@ func GetSubscriptionLogs(userId int, startIdx, num int) ([]*SubscriptionLog, int
 	return logs, total, err
 }
 
-// ========== 辅助函数 ==========
-
-func getTodayStart() int64 {
-	now := time.Now()
-	return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
-}
-
-func getWeekStart() int64 {
-	now := time.Now()
-	weekday := int(now.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-	daysToMonday := weekday - 1
-	return time.Date(now.Year(), now.Month(), now.Day()-daysToMonday, 0, 0, 0, 0, now.Location()).Unix()
-}
-
-func getMonthStart() int64 {
-	now := time.Now()
-	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
-}
-
 // ========== Redis 缓存函数 ==========
 
 // CacheSetUserSubscription 缓存用户订阅信息
@@ -620,12 +432,3 @@ func CacheDeleteUserSubscription(userId int) error {
 	return common.RDB.Del(context.Background(), key).Err()
 }
 
-// CacheIncrSubscriptionQuota 原子性增加订阅额度使用量（Redis HINCRBY）
-func CacheIncrSubscriptionQuota(userSubscriptionId int, quotaType string, amount int) error {
-	if !common.RedisEnabled {
-		return nil
-	}
-	key := fmt.Sprintf("subscription_quota:%d", userSubscriptionId)
-	field := fmt.Sprintf("%s_used", quotaType) // daily_used, weekly_used, monthly_used
-	return common.RDB.HIncrBy(context.Background(), key, field, int64(amount)).Err()
-}

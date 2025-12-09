@@ -235,16 +235,14 @@ func GetMySubscriptions(c *gin.Context) {
 		return
 	}
 
-	// 如果 Redis 启用，用 Redis 数据覆盖用量字段
-	if common.RedisEnabled {
-		for _, sub := range subs {
-			if sub.SubscriptionInfo != nil {
-				quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo)
-				dailyUsed, weeklyUsed, monthlyUsed, _ := quotaRedis.GetQuotaUsed()
-				sub.DailyQuotaUsed = dailyUsed
-				sub.WeeklyQuotaUsed = weeklyUsed
-				sub.MonthlyQuotaUsed = monthlyUsed
-			}
+	// 从 Redis 读取用量数据
+	for _, sub := range subs {
+		if sub.SubscriptionInfo != nil {
+			quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo)
+			dailyUsed, weeklyUsed, monthlyUsed, _ := quotaRedis.GetQuotaUsed()
+			sub.DailyQuotaUsed = dailyUsed
+			sub.WeeklyQuotaUsed = weeklyUsed
+			sub.MonthlyQuotaUsed = monthlyUsed
 		}
 	}
 
@@ -271,21 +269,9 @@ func GetMySubscriptionQuota(c *gin.Context) {
 	// 获取套餐信息
 	sub, _ := model.GetSubscriptionById(us.SubscriptionId)
 
-	var dailyUsed, weeklyUsed, monthlyUsed int
-
-	// 优先从 Redis 读取用量
-	if common.RedisEnabled {
-		quotaRedis := service.NewSubscriptionQuotaRedis(us.Id, sub)
-		dailyUsed, weeklyUsed, monthlyUsed, _ = quotaRedis.GetQuotaUsed()
-	} else {
-		// Redis 未启用，从数据库读取
-		if us.CheckAndResetQuota() {
-			us.Update()
-		}
-		dailyUsed = us.DailyQuotaUsed
-		weeklyUsed = us.WeeklyQuotaUsed
-		monthlyUsed = us.MonthlyQuotaUsed
-	}
+	// 从 Redis 读取用量
+	quotaRedis := service.NewSubscriptionQuotaRedis(us.Id, sub)
+	dailyUsed, weeklyUsed, monthlyUsed, _ := quotaRedis.GetQuotaUsed()
 
 	data := map[string]interface{}{
 		"daily": map[string]interface{}{
