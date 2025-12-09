@@ -22,6 +22,14 @@ export function setStatusData(data) {
   localStorage.setItem('system_name', data.system_name);
   localStorage.setItem('logo', data.logo);
   localStorage.setItem('footer_html', data.footer_html);
+
+  // 动态更新 favicon（标签页图标）
+  const faviconUrl = data.logo || '/logo.png';
+  const link = document.querySelector("link[rel*='icon']") || document.createElement('link');
+  link.type = 'image/png';
+  link.rel = 'icon';
+  link.href = faviconUrl;
+  document.getElementsByTagName('head')[0].appendChild(link);
   localStorage.setItem('quota_per_unit', data.quota_per_unit);
   // 兼容：保留旧字段，同时写入新的额度展示类型
   localStorage.setItem('display_in_currency', data.display_in_currency);
