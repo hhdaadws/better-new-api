@@ -134,18 +134,47 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 	// 订阅额度是用户余额的替代品，不区分分组
 
 	// 检查是否有可用的订阅额度（用于判断总额度是否足够）
-	hasActiveSubscription := false
-	subscriptionAvailable := false
-	if _, sub, err := model.GetActiveUserSubscriptionNoGroup(relayInfo.UserId); err == nil && sub != nil {
-		hasActiveSubscription = true
-		// 订阅存在，认为有额度可用（具体额度在预扣时检查）
-		subscriptionAvailable = true
+	subscriptionQuotaAvailable := 0 // 订阅可用额度
+	if userSub, sub, err := model.GetActiveUserSubscriptionNoGroup(relayInfo.UserId); err == nil && sub != nil {
+		// 获取订阅剩余额度（取日/周/月中最小的可用额度）
+		quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, sub)
+		dailyUsed, weeklyUsed, monthlyUsed, _ := quotaRedis.GetQuotaUsed()
+
+		// 计算各维度剩余额度
+		dailyRemaining := sub.DailyQuotaLimit - dailyUsed
+		if sub.DailyQuotaLimit == 0 {
+			dailyRemaining = int(^uint(0) >> 1) // 无限制
+		}
+		weeklyRemaining := sub.WeeklyQuotaLimit - weeklyUsed
+		if sub.WeeklyQuotaLimit == 0 {
+			weeklyRemaining = int(^uint(0) >> 1) // 无限制
+		}
+		monthlyRemaining := sub.MonthlyQuotaLimit - monthlyUsed
+		if sub.MonthlyQuotaLimit == 0 {
+			monthlyRemaining = int(^uint(0) >> 1) // 无限制
+		}
+
+		// 取最小值作为可用额度
+		subscriptionQuotaAvailable = dailyRemaining
+		if weeklyRemaining < subscriptionQuotaAvailable {
+			subscriptionQuotaAvailable = weeklyRemaining
+		}
+		if monthlyRemaining < subscriptionQuotaAvailable {
+			subscriptionQuotaAvailable = monthlyRemaining
+		}
+		if subscriptionQuotaAvailable < 0 {
+			subscriptionQuotaAvailable = 0
+		}
 	}
 
-	// 判断总额度是否足够（订阅额度 + 用户余额）
-	if userQuota <= 0 && !subscriptionAvailable {
+	// 判断总额度是否足够（订阅可用额度 + 用户余额）
+	totalAvailableQuota := userQuota + subscriptionQuotaAvailable
+	if totalAvailableQuota <= 0 {
 		return types.NewErrorWithStatusCode(
-			fmt.Errorf("用户额度不足，剩余额度: %s", logger.FormatQuota(userQuota)),
+			fmt.Errorf("用户额度不足，剩余额度: %s（订阅剩余: %s，余额: %s）",
+				logger.FormatQuota(totalAvailableQuota),
+				logger.FormatQuota(subscriptionQuotaAvailable),
+				logger.FormatQuota(userQuota)),
 			types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
 			types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 	}
@@ -153,24 +182,27 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 	trustQuota := common.GetTrustQuota()
 
 	relayInfo.UserQuota = userQuota
-	// 如果有订阅或用户余额充足，考虑信任机制
-	if (subscriptionAvailable || userQuota > trustQuota) {
-		// 用户额度充足或有订阅，判断令牌额度是否充足
+	// 如果总可用额度充足（订阅剩余+用户余额），考虑信任机制
+	if totalAvailableQuota > trustQuota {
+		// 总额度充足，判断令牌额度是否充足
 		if !relayInfo.TokenUnlimited {
 			// 非无限令牌，判断令牌额度是否充足
 			tokenQuota := c.GetInt("token_quota")
 			if tokenQuota > trustQuota {
 				// 令牌额度充足，信任令牌
 				preConsumedQuota = 0
-				logger.LogInfo(c, fmt.Sprintf("用户 %d 剩余额度 %s (订阅: %v) 且令牌 %d 额度 %d 充足, 信任且不需要预扣费",
-					relayInfo.UserId, logger.FormatQuota(userQuota), hasActiveSubscription, relayInfo.TokenId, tokenQuota))
+				logger.LogInfo(c, fmt.Sprintf("用户 %d 总可用额度 %s (订阅剩余: %s, 余额: %s) 且令牌 %d 额度 %d 充足, 信任且不需要预扣费",
+					relayInfo.UserId, logger.FormatQuota(totalAvailableQuota),
+					logger.FormatQuota(subscriptionQuotaAvailable), logger.FormatQuota(userQuota),
+					relayInfo.TokenId, tokenQuota))
 			}
 		} else {
 			// in this case, we do not pre-consume quota
 			// because the user has enough quota
 			preConsumedQuota = 0
-			logger.LogInfo(c, fmt.Sprintf("用户 %d 额度充足 (订阅: %v) 且为无限额度令牌, 信任且不需要预扣费",
-				relayInfo.UserId, hasActiveSubscription))
+			logger.LogInfo(c, fmt.Sprintf("用户 %d 总可用额度 %s (订阅剩余: %s, 余额: %s) 且为无限额度令牌, 信任且不需要预扣费",
+				relayInfo.UserId, logger.FormatQuota(totalAvailableQuota),
+				logger.FormatQuota(subscriptionQuotaAvailable), logger.FormatQuota(userQuota)))
 		}
 	}
 

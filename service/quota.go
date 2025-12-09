@@ -538,7 +538,22 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				usedSubscription, _ := TryConsumeSubscriptionQuota(relayInfo, quota)
 				if !usedSubscription {
 					// 订阅额度不可用或不足，从用户余额扣
-					err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+					// 先检查用户余额是否足够
+					userQuota, queryErr := model.GetUserQuota(relayInfo.UserId, false)
+					if queryErr != nil {
+						common.SysError("PostConsumeQuota: failed to get user quota: " + queryErr.Error())
+						// 查询失败，仍然尝试扣费（可能导致负数，但不丢失记录）
+					} else if userQuota < quota {
+						// 用户余额不足，记录日志但只扣除可用余额
+						common.SysError(fmt.Sprintf("PostConsumeQuota: 用户 %d 余额不足，需要扣费 %s，实际余额 %s，将扣至0",
+							relayInfo.UserId, logger.FormatQuota(quota), logger.FormatQuota(userQuota)))
+						if userQuota > 0 {
+							err = model.DecreaseUserQuota(relayInfo.UserId, userQuota)
+						}
+						// 不返回错误，请求已完成，只是欠费
+					} else {
+						err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+					}
 					if err != nil {
 						return err
 					}
@@ -553,7 +568,20 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				usedSubscription, _ := TryConsumeSubscriptionQuota(relayInfo, quota)
 				if !usedSubscription {
 					// 订阅额度不足，降级到用户余额
-					err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+					// 先检查用户余额是否足够
+					userQuota, queryErr := model.GetUserQuota(relayInfo.UserId, false)
+					if queryErr != nil {
+						common.SysError("PostConsumeQuota: failed to get user quota: " + queryErr.Error())
+					} else if userQuota < quota {
+						// 用户余额不足，记录日志但只扣除可用余额
+						common.SysError(fmt.Sprintf("PostConsumeQuota: 用户 %d 订阅额度用尽且余额不足，需要扣费 %s，实际余额 %s，将扣至0",
+							relayInfo.UserId, logger.FormatQuota(quota), logger.FormatQuota(userQuota)))
+						if userQuota > 0 {
+							err = model.DecreaseUserQuota(relayInfo.UserId, userQuota)
+						}
+					} else {
+						err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+					}
 					if err != nil {
 						return err
 					}
@@ -570,7 +598,20 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 			// 不能尝试从订阅扣，否则会"串味"
 			if quota > 0 {
 				// 需要补扣：只从用户余额扣
-				err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+				// 先检查用户余额是否足够
+				userQuota, queryErr := model.GetUserQuota(relayInfo.UserId, false)
+				if queryErr != nil {
+					common.SysError("PostConsumeQuota: failed to get user quota: " + queryErr.Error())
+				} else if userQuota < quota {
+					// 用户余额不足，记录日志但只扣除可用余额
+					common.SysError(fmt.Sprintf("PostConsumeQuota: 用户 %d 余额不足（预扣后），需要补扣 %s，实际余额 %s，将扣至0",
+						relayInfo.UserId, logger.FormatQuota(quota), logger.FormatQuota(userQuota)))
+					if userQuota > 0 {
+						err = model.DecreaseUserQuota(relayInfo.UserId, userQuota)
+					}
+				} else {
+					err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+				}
 				if err != nil {
 					return err
 				}

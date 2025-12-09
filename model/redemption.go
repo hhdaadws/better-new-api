@@ -206,15 +206,12 @@ func RedeemWithOptions(key string, userId int, options RedeemOptions) (quota int
 
 			// 创建用户订阅
 			us := &UserSubscription{
-				UserId:           userId,
-				SubscriptionId:   sub.Id,
-				RedemptionId:     &redemption.Id,
-				Status:           UserSubscriptionStatusActive,
-				StartTime:        now,
-				ExpireTime:       now + int64(sub.DurationDays*24*3600),
-				DailyResetTime:   getTodayStart(),
-				WeeklyResetTime:  getWeekStart(),
-				MonthlyResetTime: getMonthStart(),
+				UserId:         userId,
+				SubscriptionId: sub.Id,
+				RedemptionId:   &redemption.Id,
+				Status:         UserSubscriptionStatusActive,
+				StartTime:      now,
+				ExpireTime:     now + int64(sub.DurationDays*24*3600),
 			}
 
 			err = tx.Create(us).Error
