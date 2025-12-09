@@ -33,7 +33,7 @@ type Subscription struct {
 	Description        string `json:"description" gorm:"type:text"`
 	DailyQuotaLimit    int    `json:"daily_quota_limit" gorm:"default:0"`
 	WeeklyQuotaLimit   int    `json:"weekly_quota_limit" gorm:"default:0"`
-	MonthlyQuotaLimit  int    `json:"monthly_quota_limit" gorm:"default:0"`
+	TotalQuotaLimit    int    `json:"total_quota_limit" gorm:"column:monthly_quota_limit;default:0"` // 总限额（订阅期内不重置）
 	AllowedGroups      string `json:"allowed_groups" gorm:"type:text;not null"` // JSON array
 	DurationDays       int    `json:"duration_days" gorm:"default:30"`
 	Status             int    `json:"status" gorm:"default:1"`
@@ -57,9 +57,9 @@ type UserSubscription struct {
 	// 关联数据（不存数据库，用于 API 返回）
 	SubscriptionInfo *Subscription `json:"subscription_info,omitempty" gorm:"-"`
 	// Redis 用量数据（不存数据库，用于 API 返回）
-	DailyQuotaUsed   int `json:"daily_quota_used" gorm:"-"`
-	WeeklyQuotaUsed  int `json:"weekly_quota_used" gorm:"-"`
-	MonthlyQuotaUsed int `json:"monthly_quota_used" gorm:"-"`
+	DailyQuotaUsed  int `json:"daily_quota_used" gorm:"-"`
+	WeeklyQuotaUsed int `json:"weekly_quota_used" gorm:"-"`
+	TotalQuotaUsed  int `json:"total_quota_used" gorm:"-"` // 总用量（订阅期内累计）
 }
 
 // SubscriptionLog 订阅额度使用日志

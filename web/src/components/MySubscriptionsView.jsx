@@ -278,9 +278,9 @@ const MySubscriptionsView = () => {
               )}
 
               {renderQuotaProgress(
-                sub.monthly_quota_used,
-                sub.subscription_info.monthly_quota_limit,
-                '本月额度',
+                sub.total_quota_used,
+                sub.subscription_info.total_quota_limit,
+                '总额度',
                 'violet'
               )}
 
@@ -294,7 +294,7 @@ const MySubscriptionsView = () => {
               }}>
                 <div>• 每日额度在每天 00:00 自动重置</div>
                 <div>• 每周额度在每周一 00:00 自动重置</div>
-                <div>• 每月额度在每月 1 号 00:00 自动重置</div>
+                <div>• 总额度在订阅期内不会重置</div>
               </div>
             </div>
           )}
