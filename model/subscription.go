@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
 
 	"github.com/bytedance/gopkg/util/gopool"
+	"gorm.io/gorm"
 )
 
 // 套餐状态常量
@@ -430,5 +432,216 @@ func CacheDeleteUserSubscription(userId int) error {
 	}
 	key := fmt.Sprintf("user_subscription:%d", userId)
 	return common.RDB.Del(context.Background(), key).Err()
+}
+
+// ========== 管理员订阅管理函数 ==========
+
+// AdminAddUserSubscription 管理员为用户添加订阅
+// 如果用户已有激活订阅，将旧订阅标记为"已替换"
+func AdminAddUserSubscription(userId int, subscriptionId int, durationDays int) (*UserSubscription, error) {
+	// 验证用户存在
+	var user User
+	err := DB.First(&user, userId).Error
+	if err != nil {
+		return nil, errors.New("用户不存在")
+	}
+
+	// 验证套餐存在且启用
+	sub, err := GetSubscriptionById(subscriptionId)
+	if err != nil {
+		return nil, errors.New("套餐不存在")
+	}
+	if sub.Status != SubscriptionStatusEnabled {
+		return nil, errors.New("套餐已禁用")
+	}
+
+	// 使用套餐默认时长或自定义时长
+	if durationDays <= 0 {
+		durationDays = sub.DurationDays
+	}
+
+	now := common.GetTimestamp()
+	var newSub *UserSubscription
+
+	// 使用事务处理
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		// 检查用户是否已有激活的订阅
+		var existingSub UserSubscription
+		existingErr := tx.Where("user_id = ? AND status = ? AND expire_time > ?",
+			userId, UserSubscriptionStatusActive, now).First(&existingSub).Error
+
+		if existingErr == nil {
+			// 用户已有激活的订阅，将旧订阅标记为"已替换"
+			existingSub.Status = UserSubscriptionStatusReplaced
+			existingSub.UpdatedTime = now
+			if err := tx.Save(&existingSub).Error; err != nil {
+				return err
+			}
+		}
+
+		// 创建新订阅
+		newSub = &UserSubscription{
+			UserId:         userId,
+			SubscriptionId: subscriptionId,
+			RedemptionId:   nil, // 管理员直接创建，无兑换码
+			Status:         UserSubscriptionStatusActive,
+			StartTime:      now,
+			ExpireTime:     now + int64(durationDays*24*3600),
+			CreatedTime:    now,
+			UpdatedTime:    now,
+		}
+
+		if err := tx.Create(newSub).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("添加订阅失败：%v", err)
+	}
+
+	// 清除缓存
+	gopool.Go(func() {
+		CacheDeleteUserSubscription(userId)
+	})
+
+	// 记录日志
+	RecordLog(userId, LogTypeSystem, fmt.Sprintf("管理员添加订阅套餐：%s，有效期 %d 天", sub.Name, durationDays))
+
+	// 加载套餐信息
+	newSub.SubscriptionInfo = sub
+
+	return newSub, nil
+}
+
+// AdminUpdateUserSubscription 管理员修改用户订阅
+// 可修改：套餐ID、过期时间
+func AdminUpdateUserSubscription(userId int, userSubId int, subscriptionId *int, expireTime *int64) (*UserSubscription, error) {
+	var us UserSubscription
+
+	// 使用事务
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// 查询订阅并加锁
+		err := tx.Set("gorm:query_option", "FOR UPDATE").Where("id = ? AND user_id = ?", userSubId, userId).First(&us).Error
+		if err != nil {
+			return errors.New("订阅不存在或不属于该用户")
+		}
+
+		// 只能修改激活状态的订阅
+		if us.Status != UserSubscriptionStatusActive {
+			return errors.New("只能修改激活状态的订阅")
+		}
+
+		now := common.GetTimestamp()
+		var changes []string
+
+		// 修改套餐ID
+		if subscriptionId != nil && *subscriptionId != us.SubscriptionId {
+			// 验证新套餐
+			newSub, err := GetSubscriptionById(*subscriptionId)
+			if err != nil {
+				return errors.New("新套餐不存在")
+			}
+			if newSub.Status != SubscriptionStatusEnabled {
+				return errors.New("新套餐已禁用")
+			}
+
+			oldSubId := us.SubscriptionId
+			us.SubscriptionId = *subscriptionId
+			changes = append(changes, fmt.Sprintf("套餐 %d → %d", oldSubId, *subscriptionId))
+		}
+
+		// 修改过期时间
+		if expireTime != nil && *expireTime != us.ExpireTime {
+			if *expireTime <= now {
+				return errors.New("过期时间必须晚于当前时间")
+			}
+			if *expireTime <= us.StartTime {
+				return errors.New("过期时间必须晚于开始时间")
+			}
+
+			oldExpire := us.ExpireTime
+			us.ExpireTime = *expireTime
+			changes = append(changes, fmt.Sprintf("过期时间 %d → %d", oldExpire, *expireTime))
+		}
+
+		if len(changes) == 0 {
+			return errors.New("没有需要修改的内容")
+		}
+
+		us.UpdatedTime = now
+		if err := tx.Save(&us).Error; err != nil {
+			return err
+		}
+
+		// 记录日志
+		changeLog := strings.Join(changes, ", ")
+		RecordLog(userId, LogTypeSystem, fmt.Sprintf("管理员修改订阅：%s", changeLog))
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// 清除缓存
+	gopool.Go(func() {
+		CacheDeleteUserSubscription(userId)
+	})
+
+	// 加载套餐信息
+	sub, _ := GetSubscriptionById(us.SubscriptionId)
+	us.SubscriptionInfo = sub
+
+	return &us, nil
+}
+
+// AdminCancelUserSubscription 管理员取消用户订阅
+// 将订阅状态标记为"已取消"
+func AdminCancelUserSubscription(userId int, userSubId int) error {
+	var us UserSubscription
+
+	err := DB.Transaction(func(tx *gorm.DB) error {
+		// 查询订阅并加锁
+		err := tx.Set("gorm:query_option", "FOR UPDATE").Where("id = ? AND user_id = ?", userSubId, userId).First(&us).Error
+		if err != nil {
+			return errors.New("订阅不存在或不属于该用户")
+		}
+
+		// 只能取消激活状态的订阅
+		if us.Status != UserSubscriptionStatusActive {
+			return errors.New("只能取消激活状态的订阅")
+		}
+
+		// 标记为已取消
+		us.Status = UserSubscriptionStatusCanceled
+		us.UpdatedTime = common.GetTimestamp()
+
+		if err := tx.Save(&us).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// 清除缓存
+	gopool.Go(func() {
+		CacheDeleteUserSubscription(userId)
+	})
+
+	// 记录日志
+	sub, _ := GetSubscriptionById(us.SubscriptionId)
+	if sub != nil {
+		RecordLog(userId, LogTypeSystem, fmt.Sprintf("管理员取消订阅套餐：%s", sub.Name))
+	}
+
+	return nil
 }
 
