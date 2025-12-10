@@ -269,17 +269,32 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 		promptTokens -= cacheCreationTokens
 	}
 
+	// Anthropic 长上下文定价判断：Claude 模型 + 总输入 tokens >= 200K
+	// 官方定价：>200K 时，输入 $6/MTok（标准 $3），输出 $22.50/MTok（标准 $15）
+	// 即输入 2 倍，输出 1.5 倍
+	totalInputTokens := promptTokens + cacheTokens + cacheCreationTokens
+	isLongContext := false
+	longContextInputMultiplier := 1.0
+	longContextOutputMultiplier := 1.0
+	if totalInputTokens >= 200000 && strings.Contains(strings.ToLower(modelName), "claude") {
+		isLongContext = true
+		longContextInputMultiplier = 2.0  // $6/$3 = 2x
+		longContextOutputMultiplier = 1.5 // $22.50/$15 = 1.5x
+	}
+
 	calculateQuota := 0.0
 	if !relayInfo.PriceData.UsePrice {
-		calculateQuota = float64(promptTokens)
-		calculateQuota += float64(cacheTokens) * cacheRatio
-		calculateQuota += float64(cacheCreationTokens5m) * cacheCreationRatio5m
-		calculateQuota += float64(cacheCreationTokens1h) * cacheCreationRatio1h
+		// 输入类 tokens 应用长上下文倍率
+		calculateQuota = float64(promptTokens) * longContextInputMultiplier
+		calculateQuota += float64(cacheTokens) * cacheRatio * longContextInputMultiplier
+		calculateQuota += float64(cacheCreationTokens5m) * cacheCreationRatio5m * longContextInputMultiplier
+		calculateQuota += float64(cacheCreationTokens1h) * cacheCreationRatio1h * longContextInputMultiplier
 		remainingCacheCreationTokens := cacheCreationTokens - cacheCreationTokens5m - cacheCreationTokens1h
 		if remainingCacheCreationTokens > 0 {
-			calculateQuota += float64(remainingCacheCreationTokens) * cacheCreationRatio
+			calculateQuota += float64(remainingCacheCreationTokens) * cacheCreationRatio * longContextInputMultiplier
 		}
-		calculateQuota += float64(completionTokens) * completionRatio
+		// 输出 tokens 应用长上下文输出倍率
+		calculateQuota += float64(completionTokens) * completionRatio * longContextOutputMultiplier
 		calculateQuota = calculateQuota * groupRatio * modelRatio
 	} else {
 		calculateQuota = modelPrice * common.QuotaPerUnit * groupRatio
@@ -294,6 +309,10 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 	totalTokens := promptTokens + completionTokens
 
 	var logContent string
+	// 添加长上下文计费提示
+	if isLongContext {
+		logContent = fmt.Sprintf("（Anthropic 长上下文定价：输入 %d tokens ≥ 200K）", totalInputTokens)
+	}
 	// record all the consume log even if quota is 0
 	if totalTokens == 0 {
 		// in this case, must be some error happened
@@ -335,7 +354,8 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 		cacheCreationTokens, cacheCreationRatio,
 		cacheCreationTokens5m, cacheCreationRatio5m,
 		cacheCreationTokens1h, cacheCreationRatio1h,
-		modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
+		modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio,
+		isLongContext, totalInputTokens, longContextInputMultiplier, longContextOutputMultiplier)
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     promptTokens,
