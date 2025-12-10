@@ -102,7 +102,8 @@ func GenerateClaudeOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 	cacheCreationTokens int, cacheCreationRatio float64,
 	cacheCreationTokens5m int, cacheCreationRatio5m float64,
 	cacheCreationTokens1h int, cacheCreationRatio1h float64,
-	modelPrice float64, userGroupRatio float64) map[string]interface{} {
+	modelPrice float64, userGroupRatio float64,
+	isLongContext bool, totalInputTokens int, longContextInputMultiplier float64, longContextOutputMultiplier float64) map[string]interface{} {
 	info := GenerateTextOtherInfo(ctx, relayInfo, modelRatio, groupRatio, completionRatio, cacheTokens, cacheRatio, modelPrice, userGroupRatio)
 	info["claude"] = true
 	info["cache_creation_tokens"] = cacheCreationTokens
@@ -114,6 +115,13 @@ func GenerateClaudeOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 	if cacheCreationTokens1h != 0 {
 		info["cache_creation_tokens_1h"] = cacheCreationTokens1h
 		info["cache_creation_ratio_1h"] = cacheCreationRatio1h
+	}
+	// Anthropic 长上下文定价信息
+	if isLongContext {
+		info["long_context"] = true
+		info["long_context_input_tokens"] = totalInputTokens
+		info["long_context_input_multiplier"] = longContextInputMultiplier
+		info["long_context_output_multiplier"] = longContextOutputMultiplier
 	}
 	return info
 }
