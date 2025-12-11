@@ -18,7 +18,6 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import {
   Modal,
   SideSheet,
@@ -27,12 +26,14 @@ import {
   Space,
   Tag,
   Form,
-  Select,
-  InputNumber,
-  Popconfirm,
-  Typography,
   Progress,
+  Typography,
+  Spin,
+  Empty,
+  Popconfirm,
   DatePicker,
+  InputNumber,
+  Select,
 } from '@douyinfe/semi-ui';
 import { IconPlus, IconEdit, IconDelete } from '@douyinfe/semi-icons';
 import { API, showError, showSuccess, renderQuota, timestamp2string } from '../../../../helpers';
@@ -40,8 +41,7 @@ import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 
 const { Text } = Typography;
 
-const ManageSubscriptionModal = ({ visible, handleClose, user, refresh }) => {
-  const { t } = useTranslation();
+const ManageSubscriptionModal = ({ visible, onCancel, user, t, refresh }) => {
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(false);
   const [subscriptions, setSubscriptions] = useState([]);
@@ -49,227 +49,229 @@ const ManageSubscriptionModal = ({ visible, handleClose, user, refresh }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingSubscription, setEditingSubscription] = useState(null);
+  const [addForm, setAddForm] = useState({ subscription_id: null, duration_days: null });
+  const [editForm, setEditForm] = useState({ subscription_id: null, expire_time: null });
 
-  useEffect(() => {
-    if (visible && user) {
-      loadUserSubscriptions();
-      loadAllSubscriptions();
-    }
-  }, [visible, user]);
-
+  // Load user's subscriptions
   const loadUserSubscriptions = async () => {
+    if (!user?.id) return;
     setLoading(true);
     try {
       const res = await API.get(`/api/user/${user.id}/subscriptions?p=0&size=100`);
-      const { success, message, data } = res.data;
-      if (success) {
-        setSubscriptions(data.items || []);
+      if (res.data.success) {
+        setSubscriptions(res.data.data || []);
       } else {
-        showError(message);
+        showError(res.data.message);
       }
-    } catch (error) {
-      showError(error.message);
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      showError(e.message);
     }
+    setLoading(false);
   };
 
+  // Load all available subscription packages
   const loadAllSubscriptions = async () => {
     try {
-      const res = await API.get('/api/subscription/?p=0&size=100');
-      const { success, message, data } = res.data;
-      if (success) {
-        setAllSubscriptions(data.items || []);
+      const res = await API.get('/api/subscription/');
+      if (res.data.success) {
+        setAllSubscriptions(res.data.data || []);
       }
-    } catch (error) {
-      showError(error.message);
+    } catch (e) {
+      showError(e.message);
     }
   };
 
-  const handleAddSubscription = async (values) => {
+  useEffect(() => {
+    if (visible && user?.id) {
+      loadUserSubscriptions();
+      loadAllSubscriptions();
+    }
+  }, [visible, user?.id]);
+
+  // Render subscription status
+  const renderStatus = (status) => {
+    switch (status) {
+      case 1:
+        return <Tag color="green">{t('激活')}</Tag>;
+      case 2:
+        return <Tag color="grey">{t('过期')}</Tag>;
+      case 3:
+        return <Tag color="red">{t('已取消')}</Tag>;
+      case 4:
+        return <Tag color="orange">{t('已替换')}</Tag>;
+      default:
+        return <Tag color="grey">{t('未知')}</Tag>;
+    }
+  };
+
+  // Render quota usage
+  const renderUsage = (record) => {
+    const items = [];
+    const info = record.subscription_info;
+    if (!info) return '-';
+
+    const addUsageItem = (label, used, limit) => {
+      if (limit > 0) {
+        const percent = Math.min((used / limit) * 100, 100);
+        items.push(
+          <div key={label} className="mb-1">
+            <Text size="small">{label}: {renderQuota(used)} / {renderQuota(limit)}</Text>
+            <Progress percent={percent} size="small" style={{ width: 120 }} />
+          </div>
+        );
+      }
+    };
+
+    addUsageItem(t('日用量'), record.daily_quota_used || 0, info.daily_quota_limit || 0);
+    addUsageItem(t('周用量'), record.weekly_quota_used || 0, info.weekly_quota_limit || 0);
+    addUsageItem(t('总用量'), record.total_quota_used || 0, info.total_quota_limit || 0);
+
+    return items.length > 0 ? <div>{items}</div> : '-';
+  };
+
+  // Add subscription
+  const handleAddSubscription = async () => {
+    if (!addForm.subscription_id) {
+      showError(t('请选择订阅套餐'));
+      return;
+    }
+    setLoading(true);
     try {
-      const res = await API.post(`/api/user/${user.id}/subscription`, values);
-      const { success, message } = res.data;
-      if (success) {
+      const payload = { subscription_id: addForm.subscription_id };
+      if (addForm.duration_days && addForm.duration_days > 0) {
+        payload.duration_days = addForm.duration_days;
+      }
+      const res = await API.post(`/api/user/${user.id}/subscription`, payload);
+      if (res.data.success) {
         showSuccess(t('订阅添加成功'));
         setShowAddModal(false);
+        setAddForm({ subscription_id: null, duration_days: null });
         loadUserSubscriptions();
-        refresh();
+        if (refresh) refresh();
       } else {
-        showError(message);
+        showError(res.data.message);
       }
-    } catch (error) {
-      showError(error.message);
+    } catch (e) {
+      showError(e.message);
     }
+    setLoading(false);
   };
 
-  const handleUpdateSubscription = async (values) => {
+  // Update subscription
+  const handleUpdateSubscription = async () => {
+    if (!editForm.subscription_id && !editForm.expire_time) {
+      showError(t('请至少修改一项'));
+      return;
+    }
+    setLoading(true);
     try {
       const payload = {};
-      if (values.subscription_id) {
-        payload.subscription_id = values.subscription_id;
+      if (editForm.subscription_id) {
+        payload.subscription_id = editForm.subscription_id;
       }
-      if (values.expire_time) {
-        payload.expire_time = Math.floor(values.expire_time.getTime() / 1000);
+      if (editForm.expire_time) {
+        payload.expire_time = Math.floor(editForm.expire_time.getTime() / 1000);
       }
-
-      const res = await API.put(
-        `/api/user/${user.id}/subscription/${editingSubscription.id}`,
-        payload
-      );
-      const { success, message } = res.data;
-      if (success) {
+      const res = await API.put(`/api/user/${user.id}/subscription/${editingSubscription.id}`, payload);
+      if (res.data.success) {
         showSuccess(t('订阅修改成功'));
         setShowEditModal(false);
         setEditingSubscription(null);
+        setEditForm({ subscription_id: null, expire_time: null });
         loadUserSubscriptions();
-        refresh();
+        if (refresh) refresh();
       } else {
-        showError(message);
+        showError(res.data.message);
       }
-    } catch (error) {
-      showError(error.message);
+    } catch (e) {
+      showError(e.message);
     }
+    setLoading(false);
   };
 
-  const handleCancelSubscription = async (subId) => {
+  // Cancel subscription
+  const handleCancelSubscription = async (subscriptionId) => {
+    setLoading(true);
     try {
-      const res = await API.delete(`/api/user/${user.id}/subscription/${subId}`);
-      const { success, message } = res.data;
-      if (success) {
+      const res = await API.delete(`/api/user/${user.id}/subscription/${subscriptionId}`);
+      if (res.data.success) {
         showSuccess(t('订阅已取消'));
         loadUserSubscriptions();
-        refresh();
+        if (refresh) refresh();
       } else {
-        showError(message);
+        showError(res.data.message);
       }
-    } catch (error) {
-      showError(error.message);
+    } catch (e) {
+      showError(e.message);
     }
+    setLoading(false);
   };
 
-  const renderStatus = (status) => {
-    const statusMap = {
-      1: { text: t('激活'), color: 'green' },
-      2: { text: t('已过期'), color: 'grey' },
-      3: { text: t('已取消'), color: 'red' },
-      4: { text: t('已替换'), color: 'orange' },
-    };
-    const statusInfo = statusMap[status] || { text: t('未知'), color: 'grey' };
-    return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+  // Open edit modal
+  const openEditModal = (record) => {
+    setEditingSubscription(record);
+    setEditForm({
+      subscription_id: null,
+      expire_time: record.expire_time ? new Date(record.expire_time * 1000) : null,
+    });
+    setShowEditModal(true);
   };
 
-  const renderUsage = (record) => {
-    if (!record.subscription_info) return '-';
-
-    const daily = record.daily_quota_used || 0;
-    const dailyLimit = record.subscription_info.daily_quota_limit || 0;
-    const weekly = record.weekly_quota_used || 0;
-    const weeklyLimit = record.subscription_info.weekly_quota_limit || 0;
-    const total = record.total_quota_used || 0;
-    const totalLimit = record.subscription_info.total_quota_limit || 0;
-
-    return (
-      <Space vertical align='start'>
-        {dailyLimit > 0 && (
-          <div className='w-full'>
-            <Text size='small'>
-              {t('日')}: {renderQuota(daily)} / {renderQuota(dailyLimit)}
-            </Text>
-            <Progress
-              percent={(daily / dailyLimit) * 100}
-              size='small'
-              showInfo={false}
-            />
-          </div>
-        )}
-        {weeklyLimit > 0 && (
-          <div className='w-full'>
-            <Text size='small'>
-              {t('周')}: {renderQuota(weekly)} / {renderQuota(weeklyLimit)}
-            </Text>
-            <Progress
-              percent={(weekly / weeklyLimit) * 100}
-              size='small'
-              showInfo={false}
-            />
-          </div>
-        )}
-        {totalLimit > 0 && (
-          <div className='w-full'>
-            <Text size='small'>
-              {t('总')}: {renderQuota(total)} / {renderQuota(totalLimit)}
-            </Text>
-            <Progress
-              percent={(total / totalLimit) * 100}
-              size='small'
-              showInfo={false}
-            />
-          </div>
-        )}
-      </Space>
-    );
-  };
-
+  // Table columns
   const columns = [
     {
       title: 'ID',
       dataIndex: 'id',
-      width: 80,
+      width: 60,
     },
     {
       title: t('套餐名称'),
       dataIndex: 'subscription_info',
+      width: 120,
       render: (info) => info?.name || '-',
     },
     {
       title: t('状态'),
       dataIndex: 'status',
+      width: 80,
       render: (status) => renderStatus(status),
     },
     {
       title: t('用量'),
-      key: 'usage',
-      render: (text, record) => renderUsage(record),
+      dataIndex: 'usage',
+      width: 180,
+      render: (_, record) => renderUsage(record),
     },
     {
       title: t('有效期'),
-      key: 'time',
-      render: (text, record) => (
-        <Space vertical align='start'>
-          <Text size='small'>{timestamp2string(record.start_time)}</Text>
-          <Text size='small'>~ {timestamp2string(record.expire_time)}</Text>
-        </Space>
+      dataIndex: 'expire_time',
+      width: 150,
+      render: (time, record) => (
+        <div className="text-xs">
+          <div>{t('开始')}: {timestamp2string(record.start_time)}</div>
+          <div>{t('结束')}: {timestamp2string(time)}</div>
+        </div>
       ),
     },
     {
       title: t('操作'),
-      key: 'actions',
-      fixed: 'right',
-      width: 150,
-      render: (text, record) => {
-        if (record.status !== 1) return null;
+      dataIndex: 'operate',
+      width: 120,
+      render: (_, record) => {
+        if (record.status !== 1) return '-';
         return (
           <Space>
             <Button
-              size='small'
-              type='tertiary'
+              size="small"
+              type="tertiary"
               icon={<IconEdit />}
-              onClick={() => {
-                setEditingSubscription(record);
-                setShowEditModal(true);
-              }}
-            >
-              {t('修改')}
-            </Button>
+              onClick={() => openEditModal(record)}
+            />
             <Popconfirm
               title={t('确定要取消此订阅吗？')}
-              content={t('取消后用户将无法继续使用此订阅')}
               onConfirm={() => handleCancelSubscription(record.id)}
             >
-              <Button size='small' type='danger' icon={<IconDelete />}>
-                {t('取消')}
-              </Button>
+              <Button size="small" type="danger" icon={<IconDelete />} />
             </Popconfirm>
           </Space>
         );
@@ -277,148 +279,139 @@ const ManageSubscriptionModal = ({ visible, handleClose, user, refresh }) => {
     },
   ];
 
-  const AddSubscriptionForm = () => (
-    <Form onSubmit={handleAddSubscription}>
-      <Form.Select
-        field='subscription_id'
-        label={t('选择套餐')}
-        placeholder={t('请选择套餐')}
-        rules={[{ required: true, message: t('请选择套餐') }]}
-      >
-        {allSubscriptions
-          .filter((s) => s.status === 1)
-          .map((sub) => (
-            <Form.Select.Option key={sub.id} value={sub.id}>
-              {sub.name} ({t('限额')}: {renderQuota(sub.total_quota_limit)}, {t('时长')}: {sub.duration_days}{t('天')})
-            </Form.Select.Option>
-          ))}
-      </Form.Select>
-      <Form.InputNumber
-        field='duration_days'
-        label={t('有效天数')}
-        placeholder={t('留空使用套餐默认时长')}
-        min={1}
-        max={3650}
-      />
-      <Space className='w-full justify-end mt-4'>
-        <Button onClick={() => setShowAddModal(false)}>{t('取消')}</Button>
-        <Button type='primary' htmlType='submit'>
-          {t('添加')}
-        </Button>
-      </Space>
-    </Form>
-  );
-
-  const EditSubscriptionForm = () => {
-    if (!editingSubscription) return null;
-
-    return (
-      <Form
-        onSubmit={handleUpdateSubscription}
-        initValues={{
-          expire_time: new Date(editingSubscription.expire_time * 1000),
-        }}
-      >
-        <Form.Select
-          field='subscription_id'
-          label={t('更换套餐')}
-          placeholder={t('留空保持不变')}
-        >
-          {allSubscriptions
-            .filter((s) => s.status === 1)
-            .map((sub) => (
-              <Form.Select.Option key={sub.id} value={sub.id}>
-                {sub.name} ({t('限额')}: {renderQuota(sub.total_quota_limit)})
-              </Form.Select.Option>
-            ))}
-        </Form.Select>
-        <Form.DatePicker
-          field='expire_time'
-          label={t('过期时间')}
-          type='dateTime'
-          format='yyyy-MM-dd HH:mm:ss'
-        />
-        <Space className='w-full justify-end mt-4'>
-          <Button
-            onClick={() => {
-              setShowEditModal(false);
-              setEditingSubscription(null);
-            }}
-          >
-            {t('取消')}
-          </Button>
-          <Button type='primary' htmlType='submit'>
-            {t('保存')}
-          </Button>
-        </Space>
-      </Form>
-    );
-  };
+  // Filter enabled subscriptions for selection
+  const enabledSubscriptions = allSubscriptions.filter((s) => s.status === 1);
 
   const content = (
-    <div className='p-4'>
-      <Space vertical align='start' className='w-full' spacing='medium'>
-        <div className='flex justify-between items-center w-full'>
-          <Text strong>
-            {t('用户')}: {user?.username} (ID: {user?.id})
-          </Text>
-          <Button
-            type='primary'
-            icon={<IconPlus />}
-            onClick={() => setShowAddModal(true)}
-          >
-            {t('添加订阅')}
-          </Button>
-        </div>
+    <Spin spinning={loading}>
+      <div className="mb-4">
+        <Button
+          icon={<IconPlus />}
+          theme="solid"
+          onClick={() => setShowAddModal(true)}
+        >
+          {t('添加订阅')}
+        </Button>
+      </div>
 
-        <Table
-          columns={columns}
-          dataSource={subscriptions}
-          loading={loading}
-          pagination={false}
-          size='small'
-        />
-      </Space>
+      <Table
+        columns={columns}
+        dataSource={subscriptions}
+        pagination={false}
+        size="small"
+        empty={
+          <Empty description={t('暂无订阅记录')} />
+        }
+      />
 
+      {/* Add Subscription Modal */}
       <Modal
         title={t('添加订阅')}
         visible={showAddModal}
-        onCancel={() => setShowAddModal(false)}
-        footer={null}
+        onOk={handleAddSubscription}
+        onCancel={() => {
+          setShowAddModal(false);
+          setAddForm({ subscription_id: null, duration_days: null });
+        }}
+        okText={t('确定')}
+        cancelText={t('取消')}
       >
-        <AddSubscriptionForm />
+        <Form labelPosition="top">
+          <Form.Slot label={t('选择套餐')}>
+            <Select
+              placeholder={t('请选择订阅套餐')}
+              value={addForm.subscription_id}
+              onChange={(value) => setAddForm({ ...addForm, subscription_id: value })}
+              style={{ width: '100%' }}
+              optionList={enabledSubscriptions.map((s) => ({
+                value: s.id,
+                label: `${s.name} - ${renderQuota(s.daily_quota_limit)}/日`,
+              }))}
+            />
+          </Form.Slot>
+          <Form.Slot label={t('有效天数（可选，留空使用套餐默认值）')}>
+            <InputNumber
+              placeholder={t('天数')}
+              value={addForm.duration_days}
+              onChange={(value) => setAddForm({ ...addForm, duration_days: value })}
+              min={1}
+              style={{ width: '100%' }}
+            />
+          </Form.Slot>
+        </Form>
       </Modal>
 
+      {/* Edit Subscription Modal */}
       <Modal
         title={t('修改订阅')}
         visible={showEditModal}
+        onOk={handleUpdateSubscription}
         onCancel={() => {
           setShowEditModal(false);
           setEditingSubscription(null);
+          setEditForm({ subscription_id: null, expire_time: null });
         }}
-        footer={null}
+        okText={t('确定')}
+        cancelText={t('取消')}
       >
-        <EditSubscriptionForm />
+        <Form labelPosition="top">
+          <Form.Slot label={t('更换套餐（可选）')}>
+            <Select
+              placeholder={t('保持不变')}
+              value={editForm.subscription_id}
+              onChange={(value) => setEditForm({ ...editForm, subscription_id: value })}
+              style={{ width: '100%' }}
+              showClear
+              optionList={enabledSubscriptions.map((s) => ({
+                value: s.id,
+                label: `${s.name} - ${renderQuota(s.daily_quota_limit)}/日`,
+              }))}
+            />
+          </Form.Slot>
+          <Form.Slot label={t('修改过期时间（可选）')}>
+            <DatePicker
+              type="dateTime"
+              placeholder={t('选择新的过期时间')}
+              value={editForm.expire_time}
+              onChange={(value) => setEditForm({ ...editForm, expire_time: value })}
+              style={{ width: '100%' }}
+            />
+          </Form.Slot>
+        </Form>
       </Modal>
-    </div>
+    </Spin>
   );
 
-  return isMobile ? (
-    <SideSheet
-      title={t('管理用户订阅')}
-      visible={visible}
-      onCancel={handleClose}
-      width='90%'
-    >
-      {content}
-    </SideSheet>
-  ) : (
+  const title = (
+    <Space>
+      <Tag color="blue" shape="circle">{t('订阅')}</Tag>
+      <Text strong>{t('管理订阅')} - {user?.username}</Text>
+    </Space>
+  );
+
+  if (isMobile) {
+    return (
+      <SideSheet
+        title={title}
+        visible={visible}
+        onCancel={onCancel}
+        placement="bottom"
+        height="90%"
+      >
+        {content}
+      </SideSheet>
+    );
+  }
+
+  return (
     <Modal
-      title={t('管理用户订阅')}
+      title={title}
       visible={visible}
-      onCancel={handleClose}
+      onCancel={onCancel}
       footer={null}
-      style={{ width: 900 }}
+      width={900}
+      style={{ maxHeight: '80vh' }}
+      bodyStyle={{ overflow: 'auto' }}
     >
       {content}
     </Modal>

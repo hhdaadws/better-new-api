@@ -62,7 +62,7 @@ const UsersTable = (usersData) => {
   const [enableDisableAction, setEnableDisableAction] = useState('');
   const [showResetPasskeyModal, setShowResetPasskeyModal] = useState(false);
   const [showResetTwoFAModal, setShowResetTwoFAModal] = useState(false);
-  const [showManageSubscriptionModal, setShowManageSubscriptionModal] = useState(false);
+  const [showManageSubscription, setShowManageSubscription] = useState(false);
 
   // Modal handlers
   const showPromoteUserModal = (user) => {
@@ -98,7 +98,7 @@ const UsersTable = (usersData) => {
 
   const showManageSubscriptionUserModal = (user) => {
     setModalUser(user);
-    setShowManageSubscriptionModal(true);
+    setShowManageSubscription(true);
   };
 
   // Modal confirm handlers
@@ -253,9 +253,10 @@ const UsersTable = (usersData) => {
       />
 
       <ManageSubscriptionModal
-        visible={showManageSubscriptionModal}
-        handleClose={() => setShowManageSubscriptionModal(false)}
+        visible={showManageSubscription}
+        onCancel={() => setShowManageSubscription(false)}
         user={modalUser}
+        t={t}
         refresh={refresh}
       />
     </>

@@ -223,9 +223,6 @@ const renderOperations = (
       onClick: () => showManageSubscriptionModal(record),
     },
     {
-      node: 'divider',
-    },
-    {
       node: 'item',
       name: t('重置 Passkey'),
       onClick: () => showResetPasskeyModal(record),
