@@ -31,6 +31,7 @@ import EnableDisableUserModal from './modals/EnableDisableUserModal';
 import DeleteUserModal from './modals/DeleteUserModal';
 import ResetPasskeyModal from './modals/ResetPasskeyModal';
 import ResetTwoFAModal from './modals/ResetTwoFAModal';
+import ManageSubscriptionModal from './modals/ManageSubscriptionModal';
 
 const UsersTable = (usersData) => {
   const {
@@ -61,6 +62,7 @@ const UsersTable = (usersData) => {
   const [enableDisableAction, setEnableDisableAction] = useState('');
   const [showResetPasskeyModal, setShowResetPasskeyModal] = useState(false);
   const [showResetTwoFAModal, setShowResetTwoFAModal] = useState(false);
+  const [showManageSubscription, setShowManageSubscription] = useState(false);
 
   // Modal handlers
   const showPromoteUserModal = (user) => {
@@ -92,6 +94,11 @@ const UsersTable = (usersData) => {
   const showResetTwoFAUserModal = (user) => {
     setModalUser(user);
     setShowResetTwoFAModal(true);
+  };
+
+  const showManageSubscriptionUserModal = (user) => {
+    setModalUser(user);
+    setShowManageSubscription(true);
   };
 
   // Modal confirm handlers
@@ -132,6 +139,7 @@ const UsersTable = (usersData) => {
       showDeleteModal: showDeleteUserModal,
       showResetPasskeyModal: showResetPasskeyUserModal,
       showResetTwoFAModal: showResetTwoFAUserModal,
+      showManageSubscriptionModal: showManageSubscriptionUserModal,
     });
   }, [
     t,
@@ -143,6 +151,7 @@ const UsersTable = (usersData) => {
     showDeleteUserModal,
     showResetPasskeyUserModal,
     showResetTwoFAUserModal,
+    showManageSubscriptionUserModal,
   ]);
 
   // Handle compact mode by removing fixed positioning
@@ -241,6 +250,14 @@ const UsersTable = (usersData) => {
         onConfirm={handleResetTwoFAConfirm}
         user={modalUser}
         t={t}
+      />
+
+      <ManageSubscriptionModal
+        visible={showManageSubscription}
+        onCancel={() => setShowManageSubscription(false)}
+        user={modalUser}
+        t={t}
+        refresh={refresh}
       />
     </>
   );
