@@ -59,7 +59,9 @@ const ManageSubscriptionModal = ({ visible, onCancel, user, t, refresh }) => {
     try {
       const res = await API.get(`/api/user/${user.id}/subscriptions?p=0&size=100`);
       if (res.data.success) {
-        setSubscriptions(res.data.data || []);
+        // API returns paginated data: { items: [...], total: ... }
+        const data = res.data.data;
+        setSubscriptions(Array.isArray(data) ? data : (data?.items || []));
       } else {
         showError(res.data.message);
       }
@@ -74,7 +76,9 @@ const ManageSubscriptionModal = ({ visible, onCancel, user, t, refresh }) => {
     try {
       const res = await API.get('/api/subscription/');
       if (res.data.success) {
-        setAllSubscriptions(res.data.data || []);
+        // API returns paginated data: { items: [...], total: ... }
+        const data = res.data.data;
+        setAllSubscriptions(Array.isArray(data) ? data : (data?.items || []));
       }
     } catch (e) {
       showError(e.message);
