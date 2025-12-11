@@ -1763,6 +1763,9 @@ export function renderClaudeModelPrice(
   cacheCreationRatio5m = 1.0,
   cacheCreationTokens1h = 0,
   cacheCreationRatio1h = 1.0,
+  isLongContext = false,
+  longContextInputMultiplier = 1.0,
+  longContextOutputMultiplier = 1.0,
 ) {
   const { ratio: effectiveGroupRatio, label: ratioLabel } = getEffectiveRatio(
     groupRatio,
@@ -1790,12 +1793,13 @@ export function renderClaudeModelPrice(
     }
 
     const completionRatioValue = completionRatio || 0;
-    const inputRatioPrice = modelRatio * 2.0;
-    const completionRatioPrice = modelRatio * 2.0 * completionRatioValue;
-    const cacheRatioPrice = modelRatio * 2.0 * cacheRatio;
-    const cacheCreationRatioPrice = modelRatio * 2.0 * cacheCreationRatio;
-    const cacheCreationRatioPrice5m = modelRatio * 2.0 * cacheCreationRatio5m;
-    const cacheCreationRatioPrice1h = modelRatio * 2.0 * cacheCreationRatio1h;
+    // 应用长上下文乘数：输入类 * longContextInputMultiplier，输出类 * longContextOutputMultiplier
+    const inputRatioPrice = modelRatio * 2.0 * longContextInputMultiplier;
+    const completionRatioPrice = modelRatio * 2.0 * completionRatioValue * longContextOutputMultiplier;
+    const cacheRatioPrice = modelRatio * 2.0 * cacheRatio * longContextInputMultiplier;
+    const cacheCreationRatioPrice = modelRatio * 2.0 * cacheCreationRatio * longContextInputMultiplier;
+    const cacheCreationRatioPrice5m = modelRatio * 2.0 * cacheCreationRatio5m * longContextInputMultiplier;
+    const cacheCreationRatioPrice1h = modelRatio * 2.0 * cacheCreationRatio1h * longContextInputMultiplier;
 
     const hasSplitCacheCreation =
       cacheCreationTokens5m > 0 || cacheCreationTokens1h > 0;
@@ -1913,6 +1917,19 @@ export function renderClaudeModelPrice(
     return (
       <>
         <article>
+          {isLongContext && (
+            <p>
+              <strong>
+                {i18next.t(
+                  '长上下文定价（输入 tokens >= 200K）：输入 x{{inputMul}}，输出 x{{outputMul}}',
+                  {
+                    inputMul: longContextInputMultiplier,
+                    outputMul: longContextOutputMultiplier,
+                  },
+                )}
+              </strong>
+            </p>
+          )}
           <p>
             {i18next.t('提示价格：{{symbol}}{{price}} / 1M tokens', {
               symbol: symbol,
