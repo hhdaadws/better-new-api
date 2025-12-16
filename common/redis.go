@@ -325,3 +325,132 @@ func RedisHSetField(key, field string, value interface{}) error {
 	}
 	return nil
 }
+
+// ==================== Batch Update Redis Functions ====================
+// These functions are used to store batch updates in Redis instead of memory
+// to prevent data loss on program restart
+
+const (
+	BatchUpdateKeyPrefix = "batch_update:"
+)
+
+// RedisBatchUpdateHIncrBy atomically increments a field in a hash for batch updates
+// Key format: batch_update:{type}
+// Field: id (as string)
+// Value: delta to add
+func RedisBatchUpdateHIncrBy(updateType int, id int, delta int) error {
+	if !RedisEnabled {
+		return fmt.Errorf("redis is not enabled")
+	}
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", BatchUpdateKeyPrefix, updateType)
+	field := strconv.Itoa(id)
+
+	err := RDB.HIncrBy(ctx, key, field, int64(delta)).Err()
+	if err != nil {
+		return fmt.Errorf("failed to increment batch update field: %w", err)
+	}
+	return nil
+}
+
+// RedisBatchUpdateGetAll retrieves all pending batch updates for a given type
+// Returns a map of id -> value
+func RedisBatchUpdateGetAll(updateType int) (map[int]int, error) {
+	if !RedisEnabled {
+		return nil, fmt.Errorf("redis is not enabled")
+	}
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", BatchUpdateKeyPrefix, updateType)
+
+	result, err := RDB.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get batch update data: %w", err)
+	}
+
+	data := make(map[int]int)
+	for field, value := range result {
+		id, err := strconv.Atoi(field)
+		if err != nil {
+			SysLog(fmt.Sprintf("failed to parse batch update id %s: %v", field, err))
+			continue
+		}
+		val, err := strconv.Atoi(value)
+		if err != nil {
+			SysLog(fmt.Sprintf("failed to parse batch update value %s: %v", value, err))
+			continue
+		}
+		data[id] = val
+	}
+	return data, nil
+}
+
+// RedisBatchUpdateClear clears all pending batch updates for a given type
+func RedisBatchUpdateClear(updateType int) error {
+	if !RedisEnabled {
+		return fmt.Errorf("redis is not enabled")
+	}
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", BatchUpdateKeyPrefix, updateType)
+
+	err := RDB.Del(ctx, key).Err()
+	if err != nil {
+		return fmt.Errorf("failed to clear batch update data: %w", err)
+	}
+	return nil
+}
+
+// RedisBatchUpdateGetAndClear atomically gets all data and clears it
+// This prevents data loss during the batch update process
+func RedisBatchUpdateGetAndClear(updateType int) (map[int]int, error) {
+	if !RedisEnabled {
+		return nil, fmt.Errorf("redis is not enabled")
+	}
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", BatchUpdateKeyPrefix, updateType)
+
+	// Use MULTI/EXEC to atomically get and delete
+	txn := RDB.TxPipeline()
+	getCmd := txn.HGetAll(ctx, key)
+	txn.Del(ctx, key)
+
+	_, err := txn.Exec(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute batch update transaction: %w", err)
+	}
+
+	result, err := getCmd.Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get batch update result: %w", err)
+	}
+
+	data := make(map[int]int)
+	for field, value := range result {
+		id, err := strconv.Atoi(field)
+		if err != nil {
+			SysLog(fmt.Sprintf("failed to parse batch update id %s: %v", field, err))
+			continue
+		}
+		val, err := strconv.Atoi(value)
+		if err != nil {
+			SysLog(fmt.Sprintf("failed to parse batch update value %s: %v", value, err))
+			continue
+		}
+		data[id] = val
+	}
+	return data, nil
+}
+
+// RedisBatchUpdateHasData checks if there's any pending batch update data
+func RedisBatchUpdateHasData(updateType int) (bool, error) {
+	if !RedisEnabled {
+		return false, fmt.Errorf("redis is not enabled")
+	}
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", BatchUpdateKeyPrefix, updateType)
+
+	length, err := RDB.HLen(ctx, key).Result()
+	if err != nil {
+		return false, fmt.Errorf("failed to check batch update data: %w", err)
+	}
+	return length > 0, nil
+}

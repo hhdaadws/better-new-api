@@ -33,10 +33,10 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Determine alpha version
+      - name: Determine version
         id: version
         run: |
-          VERSION="alpha-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
+          VERSION="$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
           echo "$VERSION" > VERSION
           echo "value=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
@@ -66,7 +66,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            w3ng/better-new-api
+            miku66/newapi
             ghcr.io/${{ env.GHCR_REPOSITORY }}
 
       - name: Build & push single-arch (to both registries)
@@ -76,8 +76,8 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: |
-            w3ng/better-new-api:alpha-${{ matrix.arch }}
-            w3ng/better-new-api:${{ steps.version.outputs.value }}-${{ matrix.arch }}
+            miku66/newapi:alpha-${{ matrix.arch }}
+            miku66/newapi:${{ steps.version.outputs.value }}-${{ matrix.arch }}
             ghcr.io/${{ env.GHCR_REPOSITORY }}:alpha-${{ matrix.arch }}
             ghcr.io/${{ env.GHCR_REPOSITORY }}:${{ steps.version.outputs.value }}-${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -102,10 +102,10 @@ jobs:
       - name: Normalize GHCR repository
         run: echo "GHCR_REPOSITORY=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
-      - name: Determine alpha version
+      - name: Determine version
         id: version
         run: |
-          VERSION="alpha-$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
+          VERSION="$(date +'%Y%m%d')-$(git rev-parse --short HEAD)"
           echo "value=$VERSION" >> $GITHUB_OUTPUT
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
@@ -118,16 +118,16 @@ jobs:
       - name: Create & push manifest (Docker Hub - alpha)
         run: |
           docker buildx imagetools create \
-            -t w3ng/better-new-api:alpha \
-            w3ng/better-new-api:alpha-amd64 \
-            w3ng/better-new-api:alpha-arm64
+            -t miku66/newapi:alpha \
+            miku66/newapi:alpha-amd64 \
+            miku66/newapi:alpha-arm64
 
-      - name: Create & push manifest (Docker Hub - versioned alpha)
+      - name: Create & push manifest (Docker Hub - versioned)
         run: |
           docker buildx imagetools create \
-            -t w3ng/better-new-api:${VERSION} \
-            w3ng/better-new-api:${VERSION}-amd64 \
-            w3ng/better-new-api:${VERSION}-arm64
+            -t miku66/newapi:${VERSION} \
+            miku66/newapi:${VERSION}-amd64 \
+            miku66/newapi:${VERSION}-arm64
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -143,7 +143,7 @@ jobs:
             ghcr.io/${GHCR_REPOSITORY}:alpha-amd64 \
             ghcr.io/${GHCR_REPOSITORY}:alpha-arm64
 
-      - name: Create & push manifest (GHCR - versioned alpha)
+      - name: Create & push manifest (GHCR - versioned)
         run: |
           docker buildx imagetools create \
             -t ghcr.io/${GHCR_REPOSITORY}:${VERSION} \

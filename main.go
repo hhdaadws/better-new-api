@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -171,13 +174,43 @@ func main() {
 		port = strconv.Itoa(*common.Port)
 	}
 
-	// Log startup success message
-	common.LogStartupSuccess(startTime, port)
-
-	err = server.Run(":" + port)
-	if err != nil {
-		common.FatalLog("failed to start HTTP server: " + err.Error())
+	// Create HTTP server with graceful shutdown support
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: server,
 	}
+
+	// Start server in a goroutine
+	go func() {
+		common.LogStartupSuccess(startTime, port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			common.FatalLog("failed to start HTTP server: " + err.Error())
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server
+	quit := make(chan os.Signal, 1)
+	// SIGINT (Ctrl+C), SIGTERM (docker stop, k8s), SIGHUP (terminal closed)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	sig := <-quit
+	common.SysLog(fmt.Sprintf("received signal %v, initiating graceful shutdown...", sig))
+
+	// Flush batch updates before shutdown to prevent data loss
+	if common.BatchUpdateEnabled {
+		common.SysLog("flushing batch updates before shutdown...")
+		model.FlushBatchUpdates()
+	}
+
+	// Create a deadline to wait for current operations to complete
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Shutdown the server gracefully
+	if err := srv.Shutdown(ctx); err != nil {
+		common.SysLog("server forced to shutdown: " + err.Error())
+	}
+
+	common.SysLog("server exited gracefully")
 }
 
 func InjectUmamiAnalytics() {

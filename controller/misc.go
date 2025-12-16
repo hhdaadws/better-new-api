@@ -29,10 +29,19 @@ func TestStatus(c *gin.Context) {
 	}
 	// 获取HTTP统计信息
 	httpStats := middleware.GetStats()
+
+	// 获取批量更新统计信息
+	var batchUpdateStats map[string]int
+	if common.BatchUpdateEnabled {
+		batchUpdateStats = model.GetBatchUpdateStats()
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"success":    true,
-		"message":    "Server is running",
-		"http_stats": httpStats,
+		"success":            true,
+		"message":            "Server is running",
+		"http_stats":         httpStats,
+		"batch_update_stats": batchUpdateStats,
+		"redis_enabled":      common.RedisEnabled,
 	})
 	return
 }
