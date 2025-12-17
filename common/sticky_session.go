@@ -63,7 +63,8 @@ func GetStickySessionChannel(group, model, sessionHash string) (int, error) {
 	return channelId, nil
 }
 
-// SetStickySession creates a new sticky session binding
+// SetStickySession creates or updates a sticky session binding
+// Optimized: only writes to Redis when necessary (new session or missing IP)
 func SetStickySession(group, model, sessionHash string, channelId int, ttlMinutes int, clientIP string) error {
 	if !RedisEnabled {
 		return nil
@@ -72,7 +73,31 @@ func SetStickySession(group, model, sessionHash string, channelId int, ttlMinute
 	key := GetStickySessionKey(group, model, sessionHash)
 	ttl := time.Duration(ttlMinutes) * time.Minute
 
-	// Store session data as JSON
+	// Check if session already exists
+	existingVal, err := RDB.Get(ctx, key).Result()
+	if err == nil && existingVal != "" {
+		// Session exists, check if we need to update
+		var existingData StickySessionData
+		if jsonErr := json.Unmarshal([]byte(existingVal), &existingData); jsonErr == nil {
+			// If IP already exists and channel matches, just renew TTL (fast path)
+			if existingData.ClientIP != "" && existingData.ChannelId == channelId {
+				return RDB.Expire(ctx, key, ttl).Err()
+			}
+			// IP missing or channel changed, need to update with preserved CreatedAt
+			data := StickySessionData{
+				ChannelId: channelId,
+				Group:     group,
+				Model:     model,
+				CreatedAt: existingData.CreatedAt, // Preserve original creation time
+				ClientIP:  clientIP,
+			}
+			jsonData, _ := json.Marshal(data)
+			return RDB.Set(ctx, key, string(jsonData), ttl).Err()
+		}
+		// Legacy format (plain integer), need to upgrade with IP
+	}
+
+	// New session or legacy format upgrade
 	data := StickySessionData{
 		ChannelId: channelId,
 		Group:     group,
