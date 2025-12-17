@@ -21,7 +21,8 @@ type StickySessionData struct {
 	Group     string `json:"group"`
 	Model     string `json:"model"`
 	CreatedAt int64  `json:"created_at"`
-	ClientIP  string `json:"client_ip"`
+	Username  string `json:"username"`
+	TokenName string `json:"token_name"`
 }
 
 // GetStickySessionKey returns the Redis key for session->channel mapping
@@ -64,8 +65,8 @@ func GetStickySessionChannel(group, model, sessionHash string) (int, error) {
 }
 
 // SetStickySession creates or updates a sticky session binding
-// Optimized: only writes to Redis when necessary (new session or missing IP)
-func SetStickySession(group, model, sessionHash string, channelId int, ttlMinutes int, clientIP string) error {
+// Optimized: only writes to Redis when necessary (new session or missing user info)
+func SetStickySession(group, model, sessionHash string, channelId int, ttlMinutes int, username, tokenName string) error {
 	if !RedisEnabled {
 		return nil
 	}
@@ -79,22 +80,23 @@ func SetStickySession(group, model, sessionHash string, channelId int, ttlMinute
 		// Session exists, check if we need to update
 		var existingData StickySessionData
 		if jsonErr := json.Unmarshal([]byte(existingVal), &existingData); jsonErr == nil {
-			// If IP already exists and channel matches, just renew TTL (fast path)
-			if existingData.ClientIP != "" && existingData.ChannelId == channelId {
+			// If user info already exists and channel matches, just renew TTL (fast path)
+			if existingData.Username != "" && existingData.ChannelId == channelId {
 				return RDB.Expire(ctx, key, ttl).Err()
 			}
-			// IP missing or channel changed, need to update with preserved CreatedAt
+			// User info missing or channel changed, need to update with preserved CreatedAt
 			data := StickySessionData{
 				ChannelId: channelId,
 				Group:     group,
 				Model:     model,
 				CreatedAt: existingData.CreatedAt, // Preserve original creation time
-				ClientIP:  clientIP,
+				Username:  username,
+				TokenName: tokenName,
 			}
 			jsonData, _ := json.Marshal(data)
 			return RDB.Set(ctx, key, string(jsonData), ttl).Err()
 		}
-		// Legacy format (plain integer), need to upgrade with IP
+		// Legacy format (plain integer), need to upgrade
 	}
 
 	// New session or legacy format upgrade
@@ -103,7 +105,8 @@ func SetStickySession(group, model, sessionHash string, channelId int, ttlMinute
 		Group:     group,
 		Model:     model,
 		CreatedAt: time.Now().Unix(),
-		ClientIP:  clientIP,
+		Username:  username,
+		TokenName: tokenName,
 	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -208,13 +211,15 @@ func GetChannelStickySessions(channelId int) ([]map[string]interface{}, error) {
 			continue
 		}
 
-		// Get session data to retrieve client IP
-		clientIP := ""
+		// Get session data to retrieve user info
+		username := ""
+		tokenName := ""
 		val, err := RDB.Get(ctx, key).Result()
 		if err == nil {
 			var data StickySessionData
 			if jsonErr := json.Unmarshal([]byte(val), &data); jsonErr == nil {
-				clientIP = data.ClientIP
+				username = data.Username
+				tokenName = data.TokenName
 			}
 		}
 
@@ -224,7 +229,8 @@ func GetChannelStickySessions(channelId int) ([]map[string]interface{}, error) {
 			"model":        model,
 			"created_at":   int64(z.Score),
 			"ttl":          int64(ttl.Seconds()),
-			"client_ip":    clientIP,
+			"username":     username,
+			"token_name":   tokenName,
 		})
 	}
 

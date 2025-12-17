@@ -504,7 +504,7 @@ func selectByWeight(channels []*Channel) (*Channel, error) {
 }
 
 // BindStickySession binds a session to a channel if sticky session is enabled
-func BindStickySession(group, model, sessionId string, channel *Channel, clientIP string) error {
+func BindStickySession(group, model, sessionId string, channel *Channel, username, tokenName string) error {
 	if sessionId == "" || !common.RedisEnabled {
 		return nil
 	}
@@ -519,5 +519,5 @@ func BindStickySession(group, model, sessionId string, channel *Channel, clientI
 		ttl = 60 // Default 60 minutes
 	}
 
-	return common.SetStickySession(group, model, sessionId, channel.Id, ttl, clientIP)
+	return common.SetStickySession(group, model, sessionId, channel.Id, ttl, username, tokenName)
 }

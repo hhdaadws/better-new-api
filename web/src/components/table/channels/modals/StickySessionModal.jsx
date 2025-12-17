@@ -200,14 +200,26 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
       ),
     },
     {
-      title: t('来源IP'),
-      dataIndex: 'client_ip',
-      render: (ip) => {
-        if (!ip) return <Text type='quaternary'>-</Text>;
+      title: t('用户名'),
+      dataIndex: 'username',
+      render: (text) => {
+        if (!text) return <Text type='quaternary'>-</Text>;
         return (
-          <Tooltip content={ip}>
+          <Tag size='small' color='cyan'>
+            {text}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t('令牌'),
+      dataIndex: 'token_name',
+      render: (text) => {
+        if (!text) return <Text type='quaternary'>-</Text>;
+        return (
+          <Tooltip content={text}>
             <Text code style={{ fontSize: '12px' }}>
-              {ip}
+              {text.length > 12 ? `${text.substring(0, 12)}...` : text}
             </Text>
           </Tooltip>
         );

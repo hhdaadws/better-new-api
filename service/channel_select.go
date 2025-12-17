@@ -19,6 +19,9 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 
 	// Get sticky session ID from context (set by distributor middleware)
 	sessionId := common.GetContextKeyString(c, constant.ContextKeyStickySessionId)
+	if common.DebugEnabled {
+		common.SysLog("Sticky session ID from context: " + sessionId)
+	}
 
 	if group == "auto" {
 		if len(setting.GetAutoGroups()) == 0 {
@@ -45,10 +48,16 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 
 	// Bind sticky session if channel was selected and sessionId is provided
 	if channel != nil && sessionId != "" {
-		clientIP := c.ClientIP()
-		if bindErr := model.BindStickySession(selectGroup, modelName, sessionId, channel, clientIP); bindErr != nil {
+		username := c.GetString("username")
+		tokenName := c.GetString("token_name")
+		if common.DebugEnabled {
+			common.SysLog("Binding sticky session: sessionId=" + sessionId + ", username=" + username + ", tokenName=" + tokenName)
+		}
+		if bindErr := model.BindStickySession(selectGroup, modelName, sessionId, channel, username, tokenName); bindErr != nil {
 			logger.LogWarn(c, "Failed to bind sticky session: "+bindErr.Error())
 		}
+	} else if common.DebugEnabled && channel != nil && sessionId == "" {
+		common.SysLog("Sticky session not bound: sessionId is empty")
 	}
 
 	return channel, selectGroup, nil
