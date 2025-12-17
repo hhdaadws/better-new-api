@@ -45,7 +45,8 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 
 	// Bind sticky session if channel was selected and sessionId is provided
 	if channel != nil && sessionId != "" {
-		if bindErr := model.BindStickySession(selectGroup, modelName, sessionId, channel); bindErr != nil {
+		clientIP := c.ClientIP()
+		if bindErr := model.BindStickySession(selectGroup, modelName, sessionId, channel, clientIP); bindErr != nil {
 			logger.LogWarn(c, "Failed to bind sticky session: "+bindErr.Error())
 		}
 	}

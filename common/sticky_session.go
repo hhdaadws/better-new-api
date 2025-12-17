@@ -21,6 +21,7 @@ type StickySessionData struct {
 	Group     string `json:"group"`
 	Model     string `json:"model"`
 	CreatedAt int64  `json:"created_at"`
+	ClientIP  string `json:"client_ip"`
 }
 
 // GetStickySessionKey returns the Redis key for session->channel mapping
@@ -63,7 +64,7 @@ func GetStickySessionChannel(group, model, sessionHash string) (int, error) {
 }
 
 // SetStickySession creates a new sticky session binding
-func SetStickySession(group, model, sessionHash string, channelId int, ttlMinutes int) error {
+func SetStickySession(group, model, sessionHash string, channelId int, ttlMinutes int, clientIP string) error {
 	if !RedisEnabled {
 		return nil
 	}
@@ -77,6 +78,7 @@ func SetStickySession(group, model, sessionHash string, channelId int, ttlMinute
 		Group:     group,
 		Model:     model,
 		CreatedAt: time.Now().Unix(),
+		ClientIP:  clientIP,
 	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -172,7 +174,7 @@ func GetChannelStickySessions(channelId int) ([]map[string]interface{}, error) {
 			continue
 		}
 
-		// Get TTL for this session
+		// Get TTL and data for this session
 		key := GetStickySessionKey(group, model, sessionHash)
 		ttl, err := RDB.TTL(ctx, key).Result()
 		if err != nil || ttl < 0 {
@@ -181,12 +183,23 @@ func GetChannelStickySessions(channelId int) ([]map[string]interface{}, error) {
 			continue
 		}
 
+		// Get session data to retrieve client IP
+		clientIP := ""
+		val, err := RDB.Get(ctx, key).Result()
+		if err == nil {
+			var data StickySessionData
+			if jsonErr := json.Unmarshal([]byte(val), &data); jsonErr == nil {
+				clientIP = data.ClientIP
+			}
+		}
+
 		sessions = append(sessions, map[string]interface{}{
 			"session_hash": sessionHash,
 			"group":        group,
 			"model":        model,
 			"created_at":   int64(z.Score),
 			"ttl":          int64(ttl.Seconds()),
+			"client_ip":    clientIP,
 		})
 	}
 

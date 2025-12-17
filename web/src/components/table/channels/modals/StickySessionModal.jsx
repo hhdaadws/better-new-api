@@ -200,6 +200,20 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
       ),
     },
     {
+      title: t('来源IP'),
+      dataIndex: 'client_ip',
+      render: (ip) => {
+        if (!ip) return <Text type='quaternary'>-</Text>;
+        return (
+          <Tooltip content={ip}>
+            <Text code style={{ fontSize: '12px' }}>
+              {ip}
+            </Text>
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: t('创建时间'),
       dataIndex: 'created_at',
       render: (time) => {
