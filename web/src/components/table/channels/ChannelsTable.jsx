@@ -60,6 +60,9 @@ const ChannelsTable = (channelsData) => {
     // Multi-key management
     setShowMultiKeyManageModal,
     setCurrentMultiKeyChannel,
+    // Sticky session management
+    setShowStickySessionModal,
+    setCurrentStickySessionChannel,
   } = channelsData;
 
   // Get all columns
@@ -84,6 +87,8 @@ const ChannelsTable = (channelsData) => {
       channels,
       setShowMultiKeyManageModal,
       setCurrentMultiKeyChannel,
+      setShowStickySessionModal,
+      setCurrentStickySessionChannel,
     });
   }, [
     t,
@@ -105,6 +110,8 @@ const ChannelsTable = (channelsData) => {
     channels,
     setShowMultiKeyManageModal,
     setCurrentMultiKeyChannel,
+    setShowStickySessionModal,
+    setCurrentStickySessionChannel,
   ]);
 
   // Filter columns based on visibility settings

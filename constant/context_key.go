@@ -49,4 +49,7 @@ const (
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 
 	ContextKeySystemPromptOverride ContextKey = "system_prompt_override"
+
+	/* sticky session related keys */
+	ContextKeyStickySessionId ContextKey = "sticky_session_id"
 )

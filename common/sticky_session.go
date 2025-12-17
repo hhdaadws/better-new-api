@@ -1,0 +1,351 @@
+package common
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/go-redis/redis/v8"
+)
+
+const (
+	StickySessionPrefix          = "sticky_session:"
+	StickySessionByChannelPrefix = "sticky_sessions_by_channel:"
+)
+
+// StickySessionData stores the session binding information
+type StickySessionData struct {
+	ChannelId int    `json:"channel_id"`
+	Group     string `json:"group"`
+	Model     string `json:"model"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// GetStickySessionKey returns the Redis key for session->channel mapping
+func GetStickySessionKey(group, model, sessionHash string) string {
+	return fmt.Sprintf("%s%s:%s:%s", StickySessionPrefix, group, model, sessionHash)
+}
+
+// GetStickySessionByChannelKey returns the Redis key for channel's sessions index
+func GetStickySessionByChannelKey(channelId int) string {
+	return fmt.Sprintf("%s%d", StickySessionByChannelPrefix, channelId)
+}
+
+// GetStickySessionChannel retrieves the channel ID for a session
+func GetStickySessionChannel(group, model, sessionHash string) (int, error) {
+	if !RedisEnabled {
+		return 0, nil
+	}
+	ctx := context.Background()
+	key := GetStickySessionKey(group, model, sessionHash)
+	val, err := RDB.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	// Try to parse as JSON first (new format)
+	var data StickySessionData
+	if jsonErr := json.Unmarshal([]byte(val), &data); jsonErr == nil {
+		return data.ChannelId, nil
+	}
+
+	// Fallback: parse as plain integer (legacy format)
+	channelId, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, err
+	}
+	return channelId, nil
+}
+
+// SetStickySession creates a new sticky session binding
+func SetStickySession(group, model, sessionHash string, channelId int, ttlMinutes int) error {
+	if !RedisEnabled {
+		return nil
+	}
+	ctx := context.Background()
+	key := GetStickySessionKey(group, model, sessionHash)
+	ttl := time.Duration(ttlMinutes) * time.Minute
+
+	// Store session data as JSON
+	data := StickySessionData{
+		ChannelId: channelId,
+		Group:     group,
+		Model:     model,
+		CreatedAt: time.Now().Unix(),
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	// Use pipeline for atomic operation
+	pipe := RDB.TxPipeline()
+
+	// Set session -> channel mapping with TTL
+	pipe.Set(ctx, key, string(jsonData), ttl)
+
+	// Add to channel's session index (Sorted Set with timestamp as score)
+	indexKey := GetStickySessionByChannelKey(channelId)
+	score := float64(time.Now().Unix())
+	// Store full session key as member for later lookup
+	memberData := fmt.Sprintf("%s:%s:%s", group, model, sessionHash)
+	pipe.ZAdd(ctx, indexKey, &redis.Z{Score: score, Member: memberData})
+
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+// DeleteStickySession removes a sticky session binding
+func DeleteStickySession(group, model, sessionHash string, channelId int) error {
+	if !RedisEnabled {
+		return nil
+	}
+	ctx := context.Background()
+
+	pipe := RDB.TxPipeline()
+
+	// Delete session -> channel mapping
+	key := GetStickySessionKey(group, model, sessionHash)
+	pipe.Del(ctx, key)
+
+	// Remove from channel's session index
+	indexKey := GetStickySessionByChannelKey(channelId)
+	memberData := fmt.Sprintf("%s:%s:%s", group, model, sessionHash)
+	pipe.ZRem(ctx, indexKey, memberData)
+
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// GetChannelStickySessionCount returns the number of active sessions for a channel
+func GetChannelStickySessionCount(channelId int) (int, error) {
+	if !RedisEnabled {
+		return 0, nil
+	}
+	ctx := context.Background()
+	indexKey := GetStickySessionByChannelKey(channelId)
+
+	// First, clean up expired sessions
+	cleanupExpiredSessions(ctx, channelId)
+
+	count, err := RDB.ZCard(ctx, indexKey).Result()
+	return int(count), err
+}
+
+// GetChannelStickySessions returns all sessions for a channel with their TTL
+func GetChannelStickySessions(channelId int) ([]map[string]interface{}, error) {
+	if !RedisEnabled {
+		return nil, nil
+	}
+	ctx := context.Background()
+	indexKey := GetStickySessionByChannelKey(channelId)
+
+	// Get all members with scores
+	results, err := RDB.ZRangeWithScores(ctx, indexKey, 0, -1).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	sessions := make([]map[string]interface{}, 0)
+	expiredMembers := make([]interface{}, 0)
+
+	for _, z := range results {
+		memberData := z.Member.(string)
+		// Parse member data: group:model:sessionHash
+		var group, model, sessionHash string
+		if _, err := fmt.Sscanf(memberData, "%s", &memberData); err == nil {
+			// Split by :
+			parts := splitMemberData(memberData)
+			if len(parts) >= 3 {
+				group = parts[0]
+				model = parts[1]
+				sessionHash = parts[2]
+			}
+		}
+
+		if sessionHash == "" {
+			continue
+		}
+
+		// Get TTL for this session
+		key := GetStickySessionKey(group, model, sessionHash)
+		ttl, err := RDB.TTL(ctx, key).Result()
+		if err != nil || ttl < 0 {
+			// Session expired, mark for removal
+			expiredMembers = append(expiredMembers, memberData)
+			continue
+		}
+
+		sessions = append(sessions, map[string]interface{}{
+			"session_hash": sessionHash,
+			"group":        group,
+			"model":        model,
+			"created_at":   int64(z.Score),
+			"ttl":          int64(ttl.Seconds()),
+		})
+	}
+
+	// Clean up expired members
+	if len(expiredMembers) > 0 {
+		RDB.ZRem(ctx, indexKey, expiredMembers...)
+	}
+
+	return sessions, nil
+}
+
+// splitMemberData splits the member data string by colon
+func splitMemberData(data string) []string {
+	result := make([]string, 0)
+	current := ""
+	for _, c := range data {
+		if c == ':' {
+			result = append(result, current)
+			current = ""
+		} else {
+			current += string(c)
+		}
+	}
+	if current != "" {
+		result = append(result, current)
+	}
+	return result
+}
+
+// RenewStickySessionTTL renews the TTL if remaining time is below threshold
+func RenewStickySessionTTL(group, model, sessionHash string, ttlMinutes int) error {
+	if !RedisEnabled {
+		return nil
+	}
+	ctx := context.Background()
+	key := GetStickySessionKey(group, model, sessionHash)
+
+	// Check remaining TTL
+	ttl, err := RDB.TTL(ctx, key).Result()
+	if err != nil {
+		return err
+	}
+
+	// Renew if remaining time is less than half of the configured TTL
+	threshold := time.Duration(ttlMinutes/2) * time.Minute
+	if ttl > 0 && ttl < threshold {
+		newTTL := time.Duration(ttlMinutes) * time.Minute
+		return RDB.Expire(ctx, key, newTTL).Err()
+	}
+	return nil
+}
+
+// ReleaseAllChannelStickySessions releases all sticky sessions for a channel
+func ReleaseAllChannelStickySessions(channelId int) error {
+	if !RedisEnabled {
+		return nil
+	}
+	ctx := context.Background()
+	indexKey := GetStickySessionByChannelKey(channelId)
+
+	// Get all members
+	members, err := RDB.ZRange(ctx, indexKey, 0, -1).Result()
+	if err != nil {
+		return err
+	}
+
+	if len(members) == 0 {
+		return nil
+	}
+
+	pipe := RDB.TxPipeline()
+
+	// Delete each session key
+	for _, memberData := range members {
+		parts := splitMemberData(memberData)
+		if len(parts) >= 3 {
+			group := parts[0]
+			model := parts[1]
+			sessionHash := parts[2]
+			key := GetStickySessionKey(group, model, sessionHash)
+			pipe.Del(ctx, key)
+		}
+	}
+
+	// Delete the index
+	pipe.Del(ctx, indexKey)
+
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+// ReleaseStickySessionByChannelAndHash releases a specific sticky session
+func ReleaseStickySessionByChannelAndHash(channelId int, sessionHash string) error {
+	if !RedisEnabled {
+		return nil
+	}
+	ctx := context.Background()
+	indexKey := GetStickySessionByChannelKey(channelId)
+
+	// Find the session in the index
+	members, err := RDB.ZRange(ctx, indexKey, 0, -1).Result()
+	if err != nil {
+		return err
+	}
+
+	for _, memberData := range members {
+		parts := splitMemberData(memberData)
+		if len(parts) >= 3 && parts[2] == sessionHash {
+			group := parts[0]
+			model := parts[1]
+			return DeleteStickySession(group, model, sessionHash, channelId)
+		}
+	}
+
+	return nil
+}
+
+// cleanupExpiredSessions removes expired sessions from the channel index
+func cleanupExpiredSessions(ctx context.Context, channelId int) {
+	indexKey := GetStickySessionByChannelKey(channelId)
+
+	members, err := RDB.ZRange(ctx, indexKey, 0, -1).Result()
+	if err != nil {
+		return
+	}
+
+	expiredMembers := make([]interface{}, 0)
+
+	for _, memberData := range members {
+		parts := splitMemberData(memberData)
+		if len(parts) >= 3 {
+			group := parts[0]
+			model := parts[1]
+			sessionHash := parts[2]
+			key := GetStickySessionKey(group, model, sessionHash)
+
+			// Check if session still exists
+			exists, _ := RDB.Exists(ctx, key).Result()
+			if exists == 0 {
+				expiredMembers = append(expiredMembers, memberData)
+			}
+		}
+	}
+
+	if len(expiredMembers) > 0 {
+		RDB.ZRem(ctx, indexKey, expiredMembers...)
+	}
+}
+
+// GetStickySessionTTL returns the remaining TTL for a session in seconds
+func GetStickySessionTTL(group, model, sessionHash string) int64 {
+	if !RedisEnabled {
+		return 0
+	}
+	ctx := context.Background()
+	key := GetStickySessionKey(group, model, sessionHash)
+	ttl, err := RDB.TTL(ctx, key).Result()
+	if err != nil || ttl < 0 {
+		return 0
+	}
+	return int64(ttl.Seconds())
+}

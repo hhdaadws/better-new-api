@@ -31,6 +31,7 @@ import ColumnSelectorModal from './modals/ColumnSelectorModal';
 import EditChannelModal from './modals/EditChannelModal';
 import EditTagModal from './modals/EditTagModal';
 import MultiKeyManageModal from './modals/MultiKeyManageModal';
+import StickySessionModal from './modals/StickySessionModal';
 import { createCardProPagination } from '../../../helpers/utils';
 
 const ChannelsPage = () => {
@@ -59,6 +60,12 @@ const ChannelsPage = () => {
         visible={channelsData.showMultiKeyManageModal}
         onCancel={() => channelsData.setShowMultiKeyManageModal(false)}
         channel={channelsData.currentMultiKeyChannel}
+        onRefresh={channelsData.refresh}
+      />
+      <StickySessionModal
+        visible={channelsData.showStickySessionModal}
+        onCancel={() => channelsData.setShowStickySessionModal(false)}
+        channel={channelsData.currentStickySessionChannel}
         onRefresh={channelsData.refresh}
       />
 

@@ -157,6 +157,10 @@ const EditChannelModal = (props) => {
     header_audit_rules: '',
     content_audit_enabled: false,
     content_audit_keywords: '',
+    // 粘性会话功能
+    sticky_session_enabled: false,
+    sticky_session_max_count: 0,
+    sticky_session_ttl_minutes: 60,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -364,6 +368,9 @@ const EditChannelModal = (props) => {
     header_audit_rules: '',
     content_audit_enabled: false,
     content_audit_keywords: '',
+    sticky_session_enabled: false,
+    sticky_session_max_count: 0,
+    sticky_session_ttl_minutes: 60,
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -553,6 +560,13 @@ const EditChannelModal = (props) => {
             parsedSettings.content_audit_enabled || false;
           data.content_audit_keywords =
             parsedSettings.content_audit_keywords || '';
+          // 粘性会话设置
+          data.sticky_session_enabled =
+            parsedSettings.sticky_session_enabled || false;
+          data.sticky_session_max_count =
+            parsedSettings.sticky_session_max_count || 0;
+          data.sticky_session_ttl_minutes =
+            parsedSettings.sticky_session_ttl_minutes || 60;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -565,6 +579,9 @@ const EditChannelModal = (props) => {
           data.header_audit_rules = '';
           data.content_audit_enabled = false;
           data.content_audit_keywords = '';
+          data.sticky_session_enabled = false;
+          data.sticky_session_max_count = 0;
+          data.sticky_session_ttl_minutes = 60;
         }
       } else {
         data.force_format = false;
@@ -577,6 +594,9 @@ const EditChannelModal = (props) => {
         data.header_audit_rules = '';
         data.content_audit_enabled = false;
         data.content_audit_keywords = '';
+        data.sticky_session_enabled = false;
+        data.sticky_session_max_count = 0;
+        data.sticky_session_ttl_minutes = 60;
       }
 
       if (data.settings) {
@@ -915,6 +935,9 @@ const EditChannelModal = (props) => {
       header_audit_rules: '',
       content_audit_enabled: false,
       content_audit_keywords: '',
+      sticky_session_enabled: false,
+      sticky_session_max_count: 0,
+      sticky_session_ttl_minutes: 60,
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1206,6 +1229,10 @@ const EditChannelModal = (props) => {
       header_audit_rules: localInputs.header_audit_rules || '',
       content_audit_enabled: localInputs.content_audit_enabled || false,
       content_audit_keywords: localInputs.content_audit_keywords || '',
+      // 粘性会话设置
+      sticky_session_enabled: localInputs.sticky_session_enabled || false,
+      sticky_session_max_count: localInputs.sticky_session_max_count || 0,
+      sticky_session_ttl_minutes: localInputs.sticky_session_ttl_minutes || 60,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -3137,6 +3164,55 @@ const EditChannelModal = (props) => {
                           '每行一个关键词，请求内容包含任意关键词将被拒绝',
                         )}
                       />
+                    )}
+
+                    {/* 粘性会话功能 */}
+                    <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>
+                      {t('粘性会话')}
+                    </div>
+
+                    <Form.Switch
+                      field='sticky_session_enabled'
+                      label={t('启用粘性会话')}
+                      checkedText={t('开')}
+                      uncheckedText={t('关')}
+                      onChange={(value) =>
+                        handleChannelSettingsChange('sticky_session_enabled', value)
+                      }
+                      extraText={t(
+                        '启用后，相同 session ID 的请求将绑定到同一渠道，适用于需要保持上下文连续性的场景',
+                      )}
+                    />
+
+                    {inputs.sticky_session_enabled && (
+                      <>
+                        <Form.InputNumber
+                          field='sticky_session_max_count'
+                          label={t('最大会话数')}
+                          placeholder={t('0 表示无限制')}
+                          min={0}
+                          onNumberChange={(value) =>
+                            handleChannelSettingsChange('sticky_session_max_count', value)
+                          }
+                          style={{ width: '100%' }}
+                          extraText={t(
+                            '该渠道可绑定的最大会话数，0 表示无限制。当会话数达到上限时，新请求将使用其他可用渠道',
+                          )}
+                        />
+                        <Form.InputNumber
+                          field='sticky_session_ttl_minutes'
+                          label={t('会话过期时间（分钟）')}
+                          placeholder={t('默认 60 分钟')}
+                          min={1}
+                          onNumberChange={(value) =>
+                            handleChannelSettingsChange('sticky_session_ttl_minutes', value)
+                          }
+                          style={{ width: '100%' }}
+                          extraText={t(
+                            '会话绑定的过期时间，超时后绑定关系将自动解除。每次请求会自动续期',
+                          )}
+                        />
+                      </>
                     )}
                   </Card>
                 </div>

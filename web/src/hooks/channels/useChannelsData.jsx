@@ -93,6 +93,10 @@ export const useChannelsData = () => {
   const [showMultiKeyManageModal, setShowMultiKeyManageModal] = useState(false);
   const [currentMultiKeyChannel, setCurrentMultiKeyChannel] = useState(null);
 
+  // Sticky session management states
+  const [showStickySessionModal, setShowStickySessionModal] = useState(false);
+  const [currentStickySessionChannel, setCurrentStickySessionChannel] = useState(null);
+
   // Refs
   const requestCounter = useRef(0);
   const allSelectingRef = useRef(false);
@@ -1079,6 +1083,12 @@ export const useChannelsData = () => {
     setShowMultiKeyManageModal,
     currentMultiKeyChannel,
     setCurrentMultiKeyChannel,
+
+    // Sticky session management states
+    showStickySessionModal,
+    setShowStickySessionModal,
+    currentStickySessionChannel,
+    setCurrentStickySessionChannel,
 
     // Form
     formApi,

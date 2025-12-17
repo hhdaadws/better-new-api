@@ -207,6 +207,8 @@ export const getChannelsColumns = ({
   channels,
   setShowMultiKeyManageModal,
   setCurrentMultiKeyChannel,
+  setShowStickySessionModal,
+  setCurrentStickySessionChannel,
 }) => {
   return [
     {
@@ -482,6 +484,17 @@ export const getChannelsColumns = ({
       fixed: 'right',
       render: (text, record, index) => {
         if (record.children === undefined) {
+          // Check if sticky session is enabled for this channel
+          let stickySessionEnabled = false;
+          if (record.setting) {
+            try {
+              const setting = typeof record.setting === 'string' ? JSON.parse(record.setting) : record.setting;
+              stickySessionEnabled = setting?.sticky_session_enabled === true;
+            } catch (e) {
+              // ignore parse error
+            }
+          }
+
           const moreMenuItems = [
             {
               node: 'item',
@@ -517,6 +530,15 @@ export const getChannelsColumns = ({
                 });
               },
             },
+            ...(stickySessionEnabled ? [{
+              node: 'item',
+              name: t('粘性会话'),
+              type: 'tertiary',
+              onClick: () => {
+                setCurrentStickySessionChannel(record);
+                setShowStickySessionModal(true);
+              },
+            }] : []),
           ];
 
           return (

@@ -8,10 +8,14 @@ type ChannelSettings struct {
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
 	// 渠道审核功能
-	HeaderAuditEnabled  bool   `json:"header_audit_enabled,omitempty"`   // 是否启用请求头审核
-	HeaderAuditRules    string `json:"header_audit_rules,omitempty"`     // 请求头审核规则，JSON格式：{"header-name": "regex-pattern"}
-	ContentAuditEnabled bool   `json:"content_audit_enabled,omitempty"`  // 是否启用内容审核
+	HeaderAuditEnabled   bool   `json:"header_audit_enabled,omitempty"`   // 是否启用请求头审核
+	HeaderAuditRules     string `json:"header_audit_rules,omitempty"`     // 请求头审核规则，JSON格式：{"header-name": "regex-pattern"}
+	ContentAuditEnabled  bool   `json:"content_audit_enabled,omitempty"`  // 是否启用内容审核
 	ContentAuditKeywords string `json:"content_audit_keywords,omitempty"` // 内容审核关键词，换行分隔
+	// 粘性会话功能
+	StickySessionEnabled    bool `json:"sticky_session_enabled,omitempty"`     // 是否启用粘性会话
+	StickySessionMaxCount   int  `json:"sticky_session_max_count,omitempty"`   // 最大会话数(0=无限制)
+	StickySessionTTLMinutes int  `json:"sticky_session_ttl_minutes,omitempty"` // 会话过期时间(分钟，默认60)
 }
 
 type VertexKeyType string

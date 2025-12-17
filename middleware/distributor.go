@@ -78,6 +78,15 @@ func Distribute() func(c *gin.Context) {
 					abortWithOpenAiMessage(c, http.StatusBadRequest, "未指定模型名称，模型名称不能为空")
 					return
 				}
+
+				// Extract sticky session ID from request body
+				if requestBody, err := common.GetRequestBody(c); err == nil && len(requestBody) > 0 {
+					sessionId := service.ExtractSessionIdFromBody(requestBody)
+					if sessionId != "" {
+						common.SetContextKey(c, constant.ContextKeyStickySessionId, sessionId)
+					}
+				}
+
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 				// check path is /pg/chat/completions

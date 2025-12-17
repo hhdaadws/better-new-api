@@ -173,6 +173,11 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.GET("/tag/models", controller.GetTagModels)
 			channelRoute.POST("/copy/:id", controller.CopyChannel)
 			channelRoute.POST("/multi_key/manage", controller.ManageMultiKeys)
+			// Sticky session management
+			channelRoute.GET("/sticky_sessions/stats", controller.GetAllStickySessionStats)
+			channelRoute.GET("/:id/sticky_sessions", controller.GetChannelStickySessions)
+			channelRoute.DELETE("/:id/sticky_sessions", controller.ReleaseAllChannelStickySessions)
+			channelRoute.DELETE("/:id/sticky_sessions/:session_hash", controller.ReleaseStickySession)
 		}
 		tokenRoute := apiRouter.Group("/token")
 		tokenRoute.Use(middleware.UserAuth())

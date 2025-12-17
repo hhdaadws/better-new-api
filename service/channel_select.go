@@ -16,13 +16,17 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 	var err error
 	selectGroup := group
 	userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+
+	// Get sticky session ID from context (set by distributor middleware)
+	sessionId := common.GetContextKeyString(c, constant.ContextKeyStickySessionId)
+
 	if group == "auto" {
 		if len(setting.GetAutoGroups()) == 0 {
 			return nil, selectGroup, errors.New("auto groups is not enabled")
 		}
 		for _, autoGroup := range GetUserAutoGroup(userGroup) {
 			logger.LogDebug(c, "Auto selecting group:", autoGroup)
-			channel, _ = model.GetRandomSatisfiedChannel(autoGroup, modelName, retry)
+			channel, _ = model.GetRandomSatisfiedChannelWithStickySession(autoGroup, modelName, retry, sessionId)
 			if channel == nil {
 				continue
 			} else {
@@ -33,10 +37,18 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 			}
 		}
 	} else {
-		channel, err = model.GetRandomSatisfiedChannel(group, modelName, retry)
+		channel, err = model.GetRandomSatisfiedChannelWithStickySession(group, modelName, retry, sessionId)
 		if err != nil {
 			return nil, group, err
 		}
 	}
+
+	// Bind sticky session if channel was selected and sessionId is provided
+	if channel != nil && sessionId != "" {
+		if bindErr := model.BindStickySession(selectGroup, modelName, sessionId, channel); bindErr != nil {
+			logger.LogWarn(c, "Failed to bind sticky session: "+bindErr.Error())
+		}
+	}
+
 	return channel, selectGroup, nil
 }

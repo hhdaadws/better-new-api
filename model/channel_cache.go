@@ -263,3 +263,261 @@ func CacheUpdateChannel(channel *Channel) {
 	channelsIDM[channel.Id] = channel
 	println("after :", channelsIDM[channel.Id].ChannelInfo.MultiKeyPollingIndex)
 }
+
+// GetRandomSatisfiedChannelWithStickySession selects a channel considering sticky session bindings
+// If sessionId is provided and a valid binding exists, returns the bound channel
+// Otherwise, selects a new channel considering sticky session capacity
+func GetRandomSatisfiedChannelWithStickySession(group string, model string, retry int, sessionId string) (*Channel, error) {
+	// If sessionId is provided and Redis is enabled, check for existing binding
+	if sessionId != "" && common.RedisEnabled {
+		channelId, err := common.GetStickySessionChannel(group, model, sessionId)
+		if err == nil && channelId > 0 {
+			// Found existing binding, verify channel is still valid
+			channel, err := validateAndGetStickyChannel(channelId, group, model)
+			if err == nil && channel != nil {
+				// Renew TTL if needed
+				channelSetting := channel.GetSetting()
+				ttl := channelSetting.StickySessionTTLMinutes
+				if ttl <= 0 {
+					ttl = 60
+				}
+				_ = common.RenewStickySessionTTL(group, model, sessionId, ttl)
+				if common.DebugEnabled {
+					common.SysLog(fmt.Sprintf("Sticky session hit: sessionId=%s, channelId=%d", sessionId, channelId))
+				}
+				return channel, nil
+			}
+			// Channel not valid, delete the binding and fall through to normal selection
+			if common.DebugEnabled {
+				common.SysLog(fmt.Sprintf("Sticky session invalid, deleting: sessionId=%s, channelId=%d", sessionId, channelId))
+			}
+			_ = common.DeleteStickySession(group, model, sessionId, channelId)
+		}
+	}
+
+	// Normal channel selection with sticky session capacity consideration
+	return getRandomSatisfiedChannelWithCapacity(group, model, retry, sessionId)
+}
+
+// validateAndGetStickyChannel checks if a sticky session's channel is still valid
+func validateAndGetStickyChannel(channelId int, group, model string) (*Channel, error) {
+	if !common.MemoryCacheEnabled {
+		channel, err := GetChannelById(channelId, true)
+		if err != nil {
+			return nil, err
+		}
+		if channel.Status != common.ChannelStatusEnabled {
+			return nil, errors.New("channel disabled")
+		}
+		// Check if channel supports the model and group
+		if !channelSupportsModelAndGroup(channel, group, model) {
+			return nil, errors.New("channel does not support model or group")
+		}
+		return channel, nil
+	}
+
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+
+	channel, ok := channelsIDM[channelId]
+	if !ok || channel.Status != common.ChannelStatusEnabled {
+		return nil, errors.New("channel not found or disabled")
+	}
+
+	// Check model and group support
+	if !channelSupportsModelAndGroup(channel, group, model) {
+		return nil, errors.New("channel does not support model or group")
+	}
+
+	return channel, nil
+}
+
+// channelSupportsModelAndGroup checks if a channel supports the given model and group
+func channelSupportsModelAndGroup(channel *Channel, group, model string) bool {
+	// Check group
+	groups := strings.Split(channel.Group, ",")
+	groupFound := false
+	for _, g := range groups {
+		if strings.TrimSpace(g) == group {
+			groupFound = true
+			break
+		}
+	}
+	if !groupFound {
+		return false
+	}
+
+	// Check model
+	models := strings.Split(channel.Models, ",")
+	normalizedModel := ratio_setting.FormatMatchingModelName(model)
+	for _, m := range models {
+		if strings.TrimSpace(m) == model || strings.TrimSpace(m) == normalizedModel {
+			return true
+		}
+	}
+	return false
+}
+
+// getRandomSatisfiedChannelWithCapacity selects channel considering sticky session capacity
+func getRandomSatisfiedChannelWithCapacity(group string, model string, retry int, sessionId string) (*Channel, error) {
+	if !common.MemoryCacheEnabled {
+		return GetChannel(group, model, retry)
+	}
+
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+
+	channels := group2model2channels[group][model]
+	if len(channels) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(model)
+		channels = group2model2channels[group][normalizedModel]
+	}
+
+	if len(channels) == 0 {
+		return nil, nil
+	}
+
+	// Build priority groups
+	uniquePriorities := make(map[int]bool)
+	for _, channelId := range channels {
+		if channel, ok := channelsIDM[channelId]; ok {
+			uniquePriorities[int(channel.GetPriority())] = true
+		}
+	}
+
+	var sortedUniquePriorities []int
+	for priority := range uniquePriorities {
+		sortedUniquePriorities = append(sortedUniquePriorities, priority)
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(sortedUniquePriorities)))
+
+	// Try each priority level starting from retry
+	for priorityIdx := retry; priorityIdx < len(sortedUniquePriorities); priorityIdx++ {
+		targetPriority := int64(sortedUniquePriorities[priorityIdx])
+
+		// Collect channels at this priority level
+		var targetChannels []*Channel
+		for _, channelId := range channels {
+			if channel, ok := channelsIDM[channelId]; ok {
+				if channel.GetPriority() == targetPriority {
+					targetChannels = append(targetChannels, channel)
+				}
+			}
+		}
+
+		if len(targetChannels) == 0 {
+			continue
+		}
+
+		// If sessionId is provided, filter by sticky session capacity
+		if sessionId != "" && common.RedisEnabled {
+			availableChannels := filterBySessionCapacity(targetChannels)
+			if len(availableChannels) > 0 {
+				return selectByWeight(availableChannels)
+			}
+			// No available channels at this priority, try next priority level
+			continue
+		}
+
+		// No sessionId or Redis not enabled, use normal selection
+		return selectByWeight(targetChannels)
+	}
+
+	// If we've exhausted all priority levels with capacity filtering,
+	// fall back to normal selection without capacity filtering
+	if sessionId != "" && common.RedisEnabled && common.DebugEnabled {
+		common.SysLog("All channels at capacity, falling back to normal selection")
+	}
+	return GetRandomSatisfiedChannel(group, model, retry)
+}
+
+// filterBySessionCapacity filters channels that have available session slots
+func filterBySessionCapacity(channels []*Channel) []*Channel {
+	result := make([]*Channel, 0)
+	for _, channel := range channels {
+		setting := channel.GetSetting()
+
+		// Channel doesn't use sticky sessions, always available
+		if !setting.StickySessionEnabled {
+			result = append(result, channel)
+			continue
+		}
+
+		// Unlimited sessions
+		if setting.StickySessionMaxCount <= 0 {
+			result = append(result, channel)
+			continue
+		}
+
+		// Check current session count
+		currentCount, err := common.GetChannelStickySessionCount(channel.Id)
+		if err != nil {
+			// Error getting count, skip this channel
+			continue
+		}
+
+		if currentCount < setting.StickySessionMaxCount {
+			result = append(result, channel)
+		}
+	}
+	return result
+}
+
+// selectByWeight selects a channel from the list based on weight
+func selectByWeight(channels []*Channel) (*Channel, error) {
+	if len(channels) == 0 {
+		return nil, errors.New("no channels available")
+	}
+
+	if len(channels) == 1 {
+		return channels[0], nil
+	}
+
+	// Calculate total weight
+	var sumWeight = 0
+	for _, channel := range channels {
+		sumWeight += channel.GetWeight()
+	}
+
+	// smoothing factor and adjustment
+	smoothingFactor := 1
+	smoothingAdjustment := 0
+
+	if sumWeight == 0 {
+		sumWeight = len(channels) * 100
+		smoothingAdjustment = 100
+	} else if sumWeight/len(channels) < 10 {
+		smoothingFactor = 100
+	}
+
+	totalWeight := sumWeight * smoothingFactor
+	randomWeight := rand.Intn(totalWeight)
+
+	for _, channel := range channels {
+		randomWeight -= channel.GetWeight()*smoothingFactor + smoothingAdjustment
+		if randomWeight < 0 {
+			return channel, nil
+		}
+	}
+
+	return channels[0], nil
+}
+
+// BindStickySession binds a session to a channel if sticky session is enabled
+func BindStickySession(group, model, sessionId string, channel *Channel) error {
+	if sessionId == "" || !common.RedisEnabled {
+		return nil
+	}
+
+	setting := channel.GetSetting()
+	if !setting.StickySessionEnabled {
+		return nil
+	}
+
+	ttl := setting.StickySessionTTLMinutes
+	if ttl <= 0 {
+		ttl = 60 // Default 60 minutes
+	}
+
+	return common.SetStickySession(group, model, sessionId, channel.Id, ttl)
+}
