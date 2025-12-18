@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -51,7 +52,12 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 	if channel != nil && sessionId != "" {
 		// Check if this channel switch qualifies for free cache creation
 		// (switching from lower priority to higher priority channel, and previous usage within 5 minutes)
-		if common.RedisEnabled {
+		// Only opus and sonnet models are eligible for free cache creation, haiku is excluded
+		modelLower := strings.ToLower(modelName)
+		isEligibleForFreeCache := strings.Contains(modelLower, "opus") ||
+			strings.Contains(modelLower, "sonnet")
+
+		if isEligibleForFreeCache && common.RedisEnabled {
 			eligible, prevChannelId := common.CheckChannelSwitchForFreeCache(
 				selectGroup, modelName, sessionId,
 				channel.Id, channel.GetPriority())
@@ -65,7 +71,7 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 				}
 			}
 
-			// Update channel usage record
+			// Update channel usage record (only for opus/sonnet models)
 			_ = common.SetSessionChannelUsage(selectGroup, modelName, sessionId,
 				channel.Id, channel.GetPriority())
 		}
