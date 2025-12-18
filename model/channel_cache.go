@@ -155,6 +155,9 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 		}
 	}
 
+	// Filter out temporarily excluded channels
+	targetChannels = filterExcludedChannels(targetChannels)
+
 	if len(targetChannels) == 0 {
 		return nil, errors.New(fmt.Sprintf("no channel found, group: %s, model: %s, priority: %d", group, model, targetPriority))
 	}
@@ -409,6 +412,12 @@ func getRandomSatisfiedChannelWithCapacity(group string, model string, retry int
 			continue
 		}
 
+		// Filter out temporarily excluded channels first
+		targetChannels = filterExcludedChannels(targetChannels)
+		if len(targetChannels) == 0 {
+			continue
+		}
+
 		// If sessionId is provided, filter by sticky session capacity
 		if sessionId != "" && common.RedisEnabled {
 			availableChannels := filterBySessionCapacity(targetChannels)
@@ -429,6 +438,23 @@ func getRandomSatisfiedChannelWithCapacity(group string, model string, retry int
 		common.SysLog("All channels at capacity, falling back to normal selection")
 	}
 	return GetRandomSatisfiedChannel(group, model, retry)
+}
+
+// filterExcludedChannels filters out channels that are temporarily excluded due to session concurrency errors
+func filterExcludedChannels(channels []*Channel) []*Channel {
+	result := make([]*Channel, 0, len(channels))
+	for _, channel := range channels {
+		setting := channel.GetSetting()
+		// Only check exclusion status for channels with auto-exclude enabled
+		if setting.SessionConcurrencyAutoExclude && common.IsChannelSessionExcluded(channel.Id) {
+			if common.DebugEnabled {
+				common.SysLog(fmt.Sprintf("Channel %d temporarily excluded from dispatch", channel.Id))
+			}
+			continue // Skip excluded channel
+		}
+		result = append(result, channel)
+	}
+	return result
 }
 
 // filterBySessionCapacity filters channels that have available session slots

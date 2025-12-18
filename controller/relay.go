@@ -273,6 +273,10 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 	if openaiErr == nil {
 		return false
 	}
+	// Session concurrency error should always retry (route to next priority channel)
+	if service.IsSessionConcurrencyError(openaiErr) {
+		return true
+	}
 	if types.IsChannelError(openaiErr) {
 		return true
 	}
@@ -319,6 +323,12 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		gopool.Go(func() {
 			service.DisableChannel(channelError, err.Error())
 		})
+	}
+
+	// Handle session concurrency error - set channel temporary exclusion
+	if service.IsSessionConcurrencyError(err) {
+		channelSetting, _ := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting)
+		service.HandleSessionConcurrencyError(channelError.ChannelId, channelSetting)
 	}
 
 	if constant.ErrorLogEnabled && types.IsRecordErrorLog(err) {

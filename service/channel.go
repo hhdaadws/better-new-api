@@ -110,3 +110,42 @@ func ShouldEnableChannel(newAPIError *types.NewAPIError, status int) bool {
 	}
 	return true
 }
+
+// IsSessionConcurrencyError checks if the error indicates session concurrency window is full
+func IsSessionConcurrencyError(err *types.NewAPIError) bool {
+	if err == nil {
+		return false
+	}
+	lowerMessage := strings.ToLower(err.Error())
+	patterns := []string{
+		"session并发窗口已满",
+		"session concurrency",
+		"concurrent session",
+		"session window full",
+		"too many sessions",
+		"session limit exceeded",
+		"max sessions reached",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(lowerMessage, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+// HandleSessionConcurrencyError handles session concurrency error by setting channel temporary exclusion
+func HandleSessionConcurrencyError(channelId int, setting dto.ChannelSettings) {
+	if !setting.SessionConcurrencyAutoExclude {
+		return
+	}
+	minutes := setting.SessionConcurrencyExcludeMinutes
+	if minutes <= 0 {
+		minutes = 2 // Default 2 minutes
+	}
+	if err := common.SetChannelSessionExcluded(channelId, minutes); err != nil {
+		common.SysLog(fmt.Sprintf("Failed to set channel %d as excluded: %v", channelId, err))
+	} else {
+		common.SysLog(fmt.Sprintf("Channel %d temporarily excluded for %d minutes due to session concurrency error", channelId, minutes))
+	}
+}

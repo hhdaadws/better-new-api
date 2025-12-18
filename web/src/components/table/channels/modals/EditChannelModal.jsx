@@ -161,6 +161,9 @@ const EditChannelModal = (props) => {
     sticky_session_enabled: false,
     sticky_session_max_count: 0,
     sticky_session_ttl_minutes: 60,
+    // Session并发错误自动排除
+    session_concurrency_auto_exclude: false,
+    session_concurrency_exclude_minutes: 2,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -371,6 +374,8 @@ const EditChannelModal = (props) => {
     sticky_session_enabled: false,
     sticky_session_max_count: 0,
     sticky_session_ttl_minutes: 60,
+    session_concurrency_auto_exclude: false,
+    session_concurrency_exclude_minutes: 2,
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -567,6 +572,11 @@ const EditChannelModal = (props) => {
             parsedSettings.sticky_session_max_count || 0;
           data.sticky_session_ttl_minutes =
             parsedSettings.sticky_session_ttl_minutes || 60;
+          // Session并发错误自动排除设置
+          data.session_concurrency_auto_exclude =
+            parsedSettings.session_concurrency_auto_exclude || false;
+          data.session_concurrency_exclude_minutes =
+            parsedSettings.session_concurrency_exclude_minutes || 2;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -582,6 +592,8 @@ const EditChannelModal = (props) => {
           data.sticky_session_enabled = false;
           data.sticky_session_max_count = 0;
           data.sticky_session_ttl_minutes = 60;
+          data.session_concurrency_auto_exclude = false;
+          data.session_concurrency_exclude_minutes = 2;
         }
       } else {
         data.force_format = false;
@@ -597,6 +609,8 @@ const EditChannelModal = (props) => {
         data.sticky_session_enabled = false;
         data.sticky_session_max_count = 0;
         data.sticky_session_ttl_minutes = 60;
+        data.session_concurrency_auto_exclude = false;
+        data.session_concurrency_exclude_minutes = 2;
       }
 
       if (data.settings) {
@@ -938,6 +952,8 @@ const EditChannelModal = (props) => {
       sticky_session_enabled: false,
       sticky_session_max_count: 0,
       sticky_session_ttl_minutes: 60,
+      session_concurrency_auto_exclude: false,
+      session_concurrency_exclude_minutes: 2,
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1233,6 +1249,9 @@ const EditChannelModal = (props) => {
       sticky_session_enabled: localInputs.sticky_session_enabled || false,
       sticky_session_max_count: localInputs.sticky_session_max_count || 0,
       sticky_session_ttl_minutes: localInputs.sticky_session_ttl_minutes || 60,
+      // Session并发错误自动排除设置
+      session_concurrency_auto_exclude: localInputs.session_concurrency_auto_exclude || false,
+      session_concurrency_exclude_minutes: localInputs.session_concurrency_exclude_minutes || 2,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -3212,6 +3231,37 @@ const EditChannelModal = (props) => {
                             '会话绑定的过期时间，超时后绑定关系将自动解除。每次请求会自动续期',
                           )}
                         />
+
+                        {/* Session并发错误自动排除 */}
+                        <Form.Switch
+                          field='session_concurrency_auto_exclude'
+                          label={t('Session并发错误自动排除')}
+                          checkedText={t('开')}
+                          uncheckedText={t('关')}
+                          onChange={(value) =>
+                            handleChannelSettingsChange('session_concurrency_auto_exclude', value)
+                          }
+                          extraText={t(
+                            '当上游返回session并发窗口已满错误时，自动将该渠道从调度中临时排除',
+                          )}
+                        />
+
+                        {inputs.session_concurrency_auto_exclude && (
+                          <Form.InputNumber
+                            field='session_concurrency_exclude_minutes'
+                            label={t('排除时间（分钟）')}
+                            placeholder={t('默认 2 分钟')}
+                            min={1}
+                            max={60}
+                            onNumberChange={(value) =>
+                              handleChannelSettingsChange('session_concurrency_exclude_minutes', value)
+                            }
+                            style={{ width: '100%' }}
+                            extraText={t(
+                              '该渠道在此时间内不参与新请求的调度，已绑定的粘性会话不受影响',
+                            )}
+                          />
+                        )}
                       </>
                     )}
                   </Card>

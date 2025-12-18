@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	StickySessionPrefix          = "sticky_session:"
-	StickySessionByChannelPrefix = "sticky_sessions_by_channel:"
-	SessionChannelUsagePrefix    = "session_channel_usage:"
+	StickySessionPrefix           = "sticky_session:"
+	StickySessionByChannelPrefix  = "sticky_sessions_by_channel:"
+	SessionChannelUsagePrefix     = "session_channel_usage:"
+	ChannelSessionExcludedPrefix  = "channel_session_excluded:"
 )
 
 // SessionChannelUsage 记录会话在渠道上的使用历史
@@ -483,4 +484,44 @@ func CheckChannelSwitchForFreeCache(group, model, sessionId string, newChannelId
 	}
 
 	return true, usage.ChannelId
+}
+
+// GetChannelSessionExcludedKey returns the Redis key for channel temporary exclusion
+func GetChannelSessionExcludedKey(channelId int) string {
+	return fmt.Sprintf("%s%d", ChannelSessionExcludedPrefix, channelId)
+}
+
+// SetChannelSessionExcluded marks a channel as temporarily excluded from dispatch
+func SetChannelSessionExcluded(channelId int, excludeMinutes int) error {
+	if !RedisEnabled {
+		return nil
+	}
+	ctx := context.Background()
+	key := GetChannelSessionExcludedKey(channelId)
+	ttl := time.Duration(excludeMinutes) * time.Minute
+
+	return RDB.Set(ctx, key, time.Now().Unix(), ttl).Err()
+}
+
+// IsChannelSessionExcluded checks if a channel is temporarily excluded from dispatch
+func IsChannelSessionExcluded(channelId int) bool {
+	if !RedisEnabled {
+		return false
+	}
+	ctx := context.Background()
+	key := GetChannelSessionExcludedKey(channelId)
+
+	exists, err := RDB.Exists(ctx, key).Result()
+	return err == nil && exists > 0
+}
+
+// ClearChannelSessionExcluded removes the temporary exclusion for a channel
+func ClearChannelSessionExcluded(channelId int) error {
+	if !RedisEnabled {
+		return nil
+	}
+	ctx := context.Background()
+	key := GetChannelSessionExcludedKey(channelId)
+
+	return RDB.Del(ctx, key).Err()
 }
