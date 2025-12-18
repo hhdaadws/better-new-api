@@ -269,6 +269,22 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 		promptTokens -= cacheCreationTokens
 	}
 
+	// 检查是否符合免费缓存创建条件（由于渠道切换）
+	freeCacheCreation := common.GetContextKeyBool(ctx, constant.ContextKeyFreeCacheCreation)
+	originalCacheCreationTokens := cacheCreationTokens
+	originalCacheCreationTokens5m := cacheCreationTokens5m
+	originalCacheCreationTokens1h := cacheCreationTokens1h
+	freeCachePrevChannel := 0
+	if freeCacheCreation {
+		// 将缓存创建费用设为 0
+		cacheCreationTokens = 0
+		cacheCreationTokens5m = 0
+		cacheCreationTokens1h = 0
+		freeCachePrevChannel = common.GetContextKeyInt(ctx, constant.ContextKeyFreeCachePrevChannel)
+		logger.LogInfo(ctx, fmt.Sprintf("免费缓存创建：由于渠道切换（从渠道 %d 切换），原始缓存创建 tokens=%d",
+			freeCachePrevChannel, originalCacheCreationTokens))
+	}
+
 	// Anthropic 长上下文定价判断：Claude 模型 + 总输入 tokens >= 200K
 	// 官方定价：>200K 时，输入 $6/MTok（标准 $3），输出 $22.50/MTok（标准 $15）
 	// 即输入 2 倍，输出 1.5 倍
@@ -313,6 +329,10 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 	if isLongContext {
 		logContent = fmt.Sprintf("（Anthropic 长上下文定价：输入 %d tokens ≥ 200K）", totalInputTokens)
 	}
+	// 添加免费缓存创建提示
+	if freeCacheCreation && originalCacheCreationTokens > 0 {
+		logContent += fmt.Sprintf("（渠道切换免费缓存创建：原缓存创建 %d tokens 未计费）", originalCacheCreationTokens)
+	}
 	// record all the consume log even if quota is 0
 	if totalTokens == 0 {
 		// in this case, must be some error happened
@@ -356,6 +376,22 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 		cacheCreationTokens1h, cacheCreationRatio1h,
 		modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio,
 		isLongContext, totalInputTokens, longContextInputMultiplier, longContextOutputMultiplier)
+
+	// 如果是免费缓存创建，在日志中记录详细信息
+	if freeCacheCreation {
+		other["free_cache_creation"] = true
+		other["free_cache_original_tokens"] = originalCacheCreationTokens
+		if originalCacheCreationTokens5m > 0 {
+			other["free_cache_original_tokens_5m"] = originalCacheCreationTokens5m
+		}
+		if originalCacheCreationTokens1h > 0 {
+			other["free_cache_original_tokens_1h"] = originalCacheCreationTokens1h
+		}
+		if freeCachePrevChannel > 0 {
+			other["free_cache_prev_channel"] = freeCachePrevChannel
+		}
+	}
+
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     promptTokens,

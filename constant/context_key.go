@@ -52,4 +52,8 @@ const (
 
 	/* sticky session related keys */
 	ContextKeyStickySessionId ContextKey = "sticky_session_id"
+
+	/* free cache creation related keys */
+	ContextKeyFreeCacheCreation    ContextKey = "free_cache_creation"     // 是否免费缓存创建
+	ContextKeyFreeCachePrevChannel ContextKey = "free_cache_prev_channel" // 之前使用的渠道ID
 )

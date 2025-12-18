@@ -13,7 +13,15 @@ import (
 const (
 	StickySessionPrefix          = "sticky_session:"
 	StickySessionByChannelPrefix = "sticky_sessions_by_channel:"
+	SessionChannelUsagePrefix    = "session_channel_usage:"
 )
+
+// SessionChannelUsage 记录会话在渠道上的使用历史
+type SessionChannelUsage struct {
+	ChannelId  int   `json:"channel_id"`   // 渠道ID
+	Priority   int64 `json:"priority"`     // 渠道优先级
+	LastUsedAt int64 `json:"last_used_at"` // 最后使用时间戳
+}
 
 // StickySessionData stores the session binding information
 type StickySessionData struct {
@@ -392,4 +400,87 @@ func GetStickySessionTTL(group, model, sessionHash string) int64 {
 		return 0
 	}
 	return int64(ttl.Seconds())
+}
+
+// GetSessionChannelUsageKey returns the Redis key for session channel usage tracking
+func GetSessionChannelUsageKey(group, model, sessionId string) string {
+	return fmt.Sprintf("%s%s:%s:%s", SessionChannelUsagePrefix, group, model, sessionId)
+}
+
+// GetSessionChannelUsage retrieves the channel usage history for a session
+func GetSessionChannelUsage(group, model, sessionId string) (*SessionChannelUsage, error) {
+	if !RedisEnabled {
+		return nil, nil
+	}
+	ctx := context.Background()
+	key := GetSessionChannelUsageKey(group, model, sessionId)
+	val, err := RDB.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var usage SessionChannelUsage
+	if err := json.Unmarshal([]byte(val), &usage); err != nil {
+		return nil, err
+	}
+	return &usage, nil
+}
+
+// SetSessionChannelUsage saves the channel usage history for a session
+func SetSessionChannelUsage(group, model, sessionId string, channelId int, priority int64) error {
+	if !RedisEnabled {
+		return nil
+	}
+	ctx := context.Background()
+	key := GetSessionChannelUsageKey(group, model, sessionId)
+
+	usage := SessionChannelUsage{
+		ChannelId:  channelId,
+		Priority:   priority,
+		LastUsedAt: time.Now().Unix(),
+	}
+
+	jsonData, err := json.Marshal(usage)
+	if err != nil {
+		return err
+	}
+
+	// TTL 设为 10 分钟，稍大于 5 分钟的免费缓存阈值
+	ttl := 10 * time.Minute
+	return RDB.Set(ctx, key, string(jsonData), ttl).Err()
+}
+
+// CheckChannelSwitchForFreeCache checks if the channel switch qualifies for free cache creation
+// Returns: eligible - whether the switch qualifies, prevChannelId - the previous channel ID
+// Conditions: switching from lower priority to higher priority channel, and previous usage within 5 minutes
+func CheckChannelSwitchForFreeCache(group, model, sessionId string, newChannelId int, newPriority int64) (bool, int) {
+	if !RedisEnabled {
+		return false, 0
+	}
+
+	usage, err := GetSessionChannelUsage(group, model, sessionId)
+	if err != nil || usage == nil {
+		return false, 0
+	}
+
+	// Check if it's a different channel
+	if usage.ChannelId == newChannelId {
+		return false, 0
+	}
+
+	// Check if new channel has higher priority (indicates user was forced to use lower priority before)
+	if newPriority <= usage.Priority {
+		return false, 0
+	}
+
+	// Check if previous channel usage was within 5 minutes
+	const cacheValidDuration = 5 * 60 // 5 minutes in seconds
+	if time.Now().Unix()-usage.LastUsedAt > cacheValidDuration {
+		return false, 0
+	}
+
+	return true, usage.ChannelId
 }

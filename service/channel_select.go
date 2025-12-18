@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -48,6 +49,27 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 
 	// Bind sticky session if channel was selected and sessionId is provided
 	if channel != nil && sessionId != "" {
+		// Check if this channel switch qualifies for free cache creation
+		// (switching from lower priority to higher priority channel, and previous usage within 5 minutes)
+		if common.RedisEnabled {
+			eligible, prevChannelId := common.CheckChannelSwitchForFreeCache(
+				selectGroup, modelName, sessionId,
+				channel.Id, channel.GetPriority())
+
+			if eligible {
+				common.SetContextKey(c, constant.ContextKeyFreeCacheCreation, true)
+				common.SetContextKey(c, constant.ContextKeyFreeCachePrevChannel, prevChannelId)
+				if common.DebugEnabled {
+					common.SysLog(fmt.Sprintf("Free cache creation eligible: sessionId=%s, prevChannel=%d, newChannel=%d",
+						sessionId, prevChannelId, channel.Id))
+				}
+			}
+
+			// Update channel usage record
+			_ = common.SetSessionChannelUsage(selectGroup, modelName, sessionId,
+				channel.Id, channel.GetPriority())
+		}
+
 		username := c.GetString("username")
 		tokenName := c.GetString("token_name")
 		if common.DebugEnabled {
