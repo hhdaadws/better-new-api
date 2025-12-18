@@ -25,23 +25,25 @@ func GetAllLogs(c *gin.Context) {
 	statusCode, _ := strconv.Atoi(c.Query("status_code"))
 	errorType := c.Query("error_type")
 	content := c.Query("content")
+	freeCacheCreation := c.Query("free_cache_creation") == "true"
 
 	logs, total, err := model.GetAllLogsWithFilter(model.LogFilterParams{
-		LogType:        logType,
-		StartTimestamp: startTimestamp,
-		EndTimestamp:   endTimestamp,
-		ModelName:      modelName,
-		Username:       username,
-		TokenName:      tokenName,
-		StartIdx:       pageInfo.GetStartIdx(),
-		Num:            pageInfo.GetPageSize(),
-		Channel:        channel,
-		Group:          group,
-		Ip:             ip,
-		ErrorCode:      errorCode,
-		StatusCode:     statusCode,
-		ErrorType:      errorType,
-		Content:        content,
+		LogType:           logType,
+		StartTimestamp:    startTimestamp,
+		EndTimestamp:      endTimestamp,
+		ModelName:         modelName,
+		Username:          username,
+		TokenName:         tokenName,
+		StartIdx:          pageInfo.GetStartIdx(),
+		Num:               pageInfo.GetPageSize(),
+		Channel:           channel,
+		Group:             group,
+		Ip:                ip,
+		ErrorCode:         errorCode,
+		StatusCode:        statusCode,
+		ErrorType:         errorType,
+		Content:           content,
+		FreeCacheCreation: freeCacheCreation,
 	})
 	if err != nil {
 		common.ApiError(c, err)

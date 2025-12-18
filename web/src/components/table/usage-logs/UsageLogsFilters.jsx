@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Button, Form } from '@douyinfe/semi-ui';
+import { Button, Form, Checkbox } from '@douyinfe/semi-ui';
 import { IconSearch } from '@douyinfe/semi-icons';
 
 import { DATE_RANGE_PRESETS } from '../../../constants/console.constants';
@@ -117,8 +117,8 @@ const LogsFilters = ({
 
         {/* 操作按钮区域 */}
         <div className='flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3'>
-          {/* 日志类型选择器 */}
-          <div className='w-full sm:w-auto'>
+          {/* 日志类型选择器和免费缓存创建筛选 */}
+          <div className='flex flex-wrap items-center gap-3'>
             <Form.Select
               field='logType'
               placeholder={t('日志类型')}
@@ -140,6 +140,20 @@ const LogsFilters = ({
               <Form.Select.Option value='4'>{t('系统')}</Form.Select.Option>
               <Form.Select.Option value='5'>{t('错误')}</Form.Select.Option>
             </Form.Select>
+
+            {isAdminUser && (
+              <Form.Checkbox
+                field='free_cache_creation'
+                noLabel
+                onChange={() => {
+                  setTimeout(() => {
+                    refresh();
+                  }, 0);
+                }}
+              >
+                {t('免费缓存创建')}
+              </Form.Checkbox>
+            )}
           </div>
 
           <div className='flex gap-2 w-full sm:w-auto justify-end'>

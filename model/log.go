@@ -181,21 +181,22 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 }
 
 type LogFilterParams struct {
-	LogType        int
-	StartTimestamp int64
-	EndTimestamp   int64
-	ModelName      string
-	Username       string
-	TokenName      string
-	StartIdx       int
-	Num            int
-	Channel        int
-	Group          string
-	Ip             string
-	ErrorCode      string
-	StatusCode     int
-	ErrorType      string
-	Content        string
+	LogType           int
+	StartTimestamp    int64
+	EndTimestamp      int64
+	ModelName         string
+	Username          string
+	TokenName         string
+	StartIdx          int
+	Num               int
+	Channel           int
+	Group             string
+	Ip                string
+	ErrorCode         string
+	StatusCode        int
+	ErrorType         string
+	Content           string
+	FreeCacheCreation bool // 筛选免费缓存创建的记录
 }
 
 func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, ip string) (logs []*Log, total int64, err error) {
@@ -261,6 +262,10 @@ func GetAllLogsWithFilter(params LogFilterParams) (logs []*Log, total int64, err
 	// 内容关键词搜索
 	if params.Content != "" {
 		tx = tx.Where("logs.content LIKE ?", "%"+params.Content+"%")
+	}
+	// 免费缓存创建筛选 (在other JSON字段中)
+	if params.FreeCacheCreation {
+		tx = tx.Where("logs.other LIKE ?", "%\"free_cache_creation\":true%")
 	}
 	err = tx.Model(&Log{}).Count(&total).Error
 	if err != nil {
