@@ -281,8 +281,8 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 		cacheCreationTokens5m = 0
 		cacheCreationTokens1h = 0
 		freeCachePrevChannel = common.GetContextKeyInt(ctx, constant.ContextKeyFreeCachePrevChannel)
-		logger.LogInfo(ctx, fmt.Sprintf("免费缓存创建：由于渠道切换（从渠道 %d 切换），原始缓存创建 tokens=%d",
-			freeCachePrevChannel, originalCacheCreationTokens))
+		logger.LogInfo(ctx, fmt.Sprintf("免费缓存创建：由于渠道切换（从渠道 %d 切换到渠道 %d），原始缓存创建 tokens=%d",
+			freeCachePrevChannel, relayInfo.ChannelId, originalCacheCreationTokens))
 	}
 
 	// Anthropic 长上下文定价判断：Claude 模型 + 总输入 tokens >= 200K
@@ -331,7 +331,8 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 	}
 	// 添加免费缓存创建提示
 	if freeCacheCreation && originalCacheCreationTokens > 0 {
-		logContent += fmt.Sprintf("（渠道切换免费缓存创建：原缓存创建 %d tokens 未计费）", originalCacheCreationTokens)
+		logContent += fmt.Sprintf("（渠道切换免费缓存创建：从渠道 %d 切换到渠道 %d，原缓存创建 %d tokens 未计费）",
+			freeCachePrevChannel, relayInfo.ChannelId, originalCacheCreationTokens)
 	}
 	// record all the consume log even if quota is 0
 	if totalTokens == 0 {
@@ -390,6 +391,7 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 		if freeCachePrevChannel > 0 {
 			other["free_cache_prev_channel"] = freeCachePrevChannel
 		}
+		other["free_cache_new_channel"] = relayInfo.ChannelId
 	}
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
