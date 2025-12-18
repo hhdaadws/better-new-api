@@ -6,6 +6,8 @@ type StickySession struct {
 	ChannelId   int    `json:"channel_id"`
 	Group       string `json:"group"`
 	Model       string `json:"model"`
+	Username    string `json:"username"`
+	TokenName   string `json:"token_name"`
 	CreatedAt   int64  `json:"created_at"`
 	TTL         int64  `json:"ttl"` // remaining TTL in seconds
 }

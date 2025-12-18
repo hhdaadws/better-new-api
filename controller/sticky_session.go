@@ -57,11 +57,15 @@ func GetChannelStickySessions(c *gin.Context) {
 
 	sessionList := make([]model.StickySession, 0)
 	for _, s := range sessions {
+		username, _ := s["username"].(string)
+		tokenName, _ := s["token_name"].(string)
 		sessionList = append(sessionList, model.StickySession{
 			SessionHash: s["session_hash"].(string),
 			ChannelId:   id,
 			Group:       s["group"].(string),
 			Model:       s["model"].(string),
+			Username:    username,
+			TokenName:   tokenName,
 			CreatedAt:   s["created_at"].(int64),
 			TTL:         s["ttl"].(int64),
 		})
