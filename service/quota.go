@@ -285,6 +285,18 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 			freeCachePrevChannel, relayInfo.ChannelId, originalCacheCreationTokens))
 	}
 
+	// 检查是否启用了1h缓存按5m计费
+	cacheCreation1hAs5m := false
+	if relayInfo.ChannelMeta != nil {
+		cacheCreation1hAs5m = relayInfo.ChannelMeta.ChannelSetting.CacheCreation1hAs5m
+	}
+	// 如果启用了1h缓存按5m计费，将1h tokens合并到5m中计算
+	if cacheCreation1hAs5m && cacheCreationTokens1h > 0 {
+		cacheCreationTokens5m += cacheCreationTokens1h
+		cacheCreationTokens1h = 0
+		cacheCreationRatio1h = cacheCreationRatio5m // 使用5m的倍率
+	}
+
 	// Anthropic 长上下文定价判断：Claude 模型 + 总输入 tokens >= 200K
 	// 官方定价：>200K 时，输入 $6/MTok（标准 $3），输出 $22.50/MTok（标准 $15）
 	// 即输入 2 倍，输出 1.5 倍
@@ -376,7 +388,8 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 		cacheCreationTokens5m, cacheCreationRatio5m,
 		cacheCreationTokens1h, cacheCreationRatio1h,
 		modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio,
-		isLongContext, totalInputTokens, longContextInputMultiplier, longContextOutputMultiplier)
+		isLongContext, totalInputTokens, longContextInputMultiplier, longContextOutputMultiplier,
+		cacheCreation1hAs5m)
 
 	// 如果是免费缓存创建，在日志中记录详细信息
 	if freeCacheCreation {

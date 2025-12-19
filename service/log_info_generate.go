@@ -103,7 +103,8 @@ func GenerateClaudeOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 	cacheCreationTokens5m int, cacheCreationRatio5m float64,
 	cacheCreationTokens1h int, cacheCreationRatio1h float64,
 	modelPrice float64, userGroupRatio float64,
-	isLongContext bool, totalInputTokens int, longContextInputMultiplier float64, longContextOutputMultiplier float64) map[string]interface{} {
+	isLongContext bool, totalInputTokens int, longContextInputMultiplier float64, longContextOutputMultiplier float64,
+	cacheCreation1hAs5m bool) map[string]interface{} {
 	info := GenerateTextOtherInfo(ctx, relayInfo, modelRatio, groupRatio, completionRatio, cacheTokens, cacheRatio, modelPrice, userGroupRatio)
 	info["claude"] = true
 	info["cache_creation_tokens"] = cacheCreationTokens
@@ -122,6 +123,10 @@ func GenerateClaudeOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo,
 		info["long_context_input_tokens"] = totalInputTokens
 		info["long_context_input_multiplier"] = longContextInputMultiplier
 		info["long_context_output_multiplier"] = longContextOutputMultiplier
+	}
+	// 如果启用了1h缓存按5m计费，添加标记
+	if cacheCreation1hAs5m {
+		info["cache_creation_1h_as_5m"] = true
 	}
 	return info
 }

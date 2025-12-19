@@ -19,6 +19,8 @@ type ChannelSettings struct {
 	// Session并发错误自动排除
 	SessionConcurrencyAutoExclude    bool `json:"session_concurrency_auto_exclude,omitempty"`    // 并发错误自动排除
 	SessionConcurrencyExcludeMinutes int  `json:"session_concurrency_exclude_minutes,omitempty"` // 排除时间(分钟,默认2)
+	// Claude 缓存计费设置
+	CacheCreation1hAs5m bool `json:"cache_creation_1h_as_5m,omitempty"` // 1小时缓存创建按5分钟倍率计费
 }
 
 type VertexKeyType string
@@ -43,7 +45,7 @@ type ChannelOtherSettings struct {
 	DisableStore          bool          `json:"disable_store,omitempty"`           // 是否禁用 store 透传（默认允许透传，禁用后可能导致 Codex 无法使用）
 	AllowSafetyIdentifier bool          `json:"allow_safety_identifier,omitempty"` // 是否允许 safety_identifier 透传（默认过滤以保护用户隐私）
 	AwsKeyType            AwsKeyType    `json:"aws_key_type,omitempty"`
-	PassThroughHeaders    bool          `json:"pass_through_headers,omitempty"`    // 是否透传全部客户端请求头（默认false，仅透传Content-Type和Accept）
+	PassThroughHeaders    bool          `json:"pass_through_headers,omitempty"` // 是否透传全部客户端请求头（默认false，仅透传Content-Type和Accept）
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {
