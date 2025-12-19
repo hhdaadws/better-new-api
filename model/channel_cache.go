@@ -316,6 +316,11 @@ func validateAndGetStickyChannel(channelId int, group, model string) (*Channel, 
 		if !channelSupportsModelAndGroup(channel, group, model) {
 			return nil, errors.New("channel does not support model or group")
 		}
+		// Check if sticky session is enabled for this channel
+		setting := channel.GetSetting()
+		if !setting.StickySessionEnabled {
+			return nil, errors.New("sticky session disabled for this channel")
+		}
 		return channel, nil
 	}
 
@@ -330,6 +335,12 @@ func validateAndGetStickyChannel(channelId int, group, model string) (*Channel, 
 	// Check model and group support
 	if !channelSupportsModelAndGroup(channel, group, model) {
 		return nil, errors.New("channel does not support model or group")
+	}
+
+	// Check if sticky session is enabled for this channel
+	setting := channel.GetSetting()
+	if !setting.StickySessionEnabled {
+		return nil, errors.New("sticky session disabled for this channel")
 	}
 
 	return channel, nil
