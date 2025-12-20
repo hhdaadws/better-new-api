@@ -7,7 +7,10 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 )
+
+const MaskedErrorMessage = "Internal Server Error"
 
 type OpenAIError struct {
 	Message string `json:"message"`
@@ -169,6 +172,10 @@ func (e *NewAPIError) ToOpenAIError() OpenAIError {
 	if result.Message == "" {
 		result.Message = string(e.errorType)
 	}
+	// 如果开启了错误伪装，替换返回给用户的消息
+	if operation_setting.ShouldMaskErrorMessage() {
+		result.Message = MaskedErrorMessage
+	}
 	return result
 }
 
@@ -197,6 +204,10 @@ func (e *NewAPIError) ToClaudeError() ClaudeError {
 	}
 	if result.Message == "" {
 		result.Message = string(e.errorType)
+	}
+	// 如果开启了错误伪装，替换返回给用户的消息
+	if operation_setting.ShouldMaskErrorMessage() {
+		result.Message = MaskedErrorMessage
 	}
 	return result
 }

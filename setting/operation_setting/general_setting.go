@@ -20,6 +20,8 @@ type GeneralSetting struct {
 	CustomCurrencySymbol string `json:"custom_currency_symbol"`
 	// 自定义货币与美元汇率（1 USD = X Custom）
 	CustomCurrencyExchangeRate float64 `json:"custom_currency_exchange_rate"`
+	// 是否将API错误信息伪装为通用错误，避免暴露真实错误给用户
+	MaskErrorMessage bool `json:"mask_error_message"`
 }
 
 // 默认配置
@@ -30,6 +32,7 @@ var generalSetting = GeneralSetting{
 	QuotaDisplayType:           QuotaDisplayTypeUSD,
 	CustomCurrencySymbol:       "¤",
 	CustomCurrencyExchangeRate: 1.0,
+	MaskErrorMessage:           false,
 }
 
 func init() {
@@ -88,4 +91,9 @@ func GetUsdToCurrencyRate(usdToCny float64) float64 {
 	default:
 		return 1
 	}
+}
+
+// ShouldMaskErrorMessage 返回是否应该伪装API错误信息
+func ShouldMaskErrorMessage() bool {
+	return generalSetting.MaskErrorMessage
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
@@ -27,6 +28,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+const MaskedErrorMessage = "Internal Server Error"
 
 func relayHandler(c *gin.Context, info *relaycommon.RelayInfo) *types.NewAPIError {
 	var err *types.NewAPIError
@@ -410,8 +413,12 @@ func RelayMidjourney(c *gin.Context) {
 	relayInfo, err := relaycommon.GenRelayInfo(c, types.RelayFormatMjProxy, nil, nil)
 
 	if err != nil {
+		description := fmt.Sprintf("failed to generate relay info: %s", err.Error())
+		if operation_setting.ShouldMaskErrorMessage() {
+			description = MaskedErrorMessage
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"description": fmt.Sprintf("failed to generate relay info: %s", err.Error()),
+			"description": description,
 			"type":        "upstream_error",
 			"code":        4,
 		})
@@ -435,23 +442,34 @@ func RelayMidjourney(c *gin.Context) {
 	log.Println(mjErr)
 	if mjErr != nil {
 		statusCode := http.StatusBadRequest
+		resultMsg := mjErr.Result
 		if mjErr.Code == 30 {
-			mjErr.Result = "当前分组负载已饱和，请稍后再试，或升级账户以提升服务质量。"
+			resultMsg = "当前分组负载已饱和，请稀后再试，或升级账户以提升服务质量。"
 			statusCode = http.StatusTooManyRequests
 		}
+		description := fmt.Sprintf("%s %s", mjErr.Description, resultMsg)
+		// 记录真实错误到日志
+		channelId := c.GetInt("channel_id")
+		logger.LogError(c, fmt.Sprintf("relay error (channel #%d, status code %d): %s", channelId, statusCode, description))
+		// 如果开启了错误伪装，替换返回给用户的消息
+		if operation_setting.ShouldMaskErrorMessage() {
+			description = MaskedErrorMessage
+		}
 		c.JSON(statusCode, gin.H{
-			"description": fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result),
+			"description": description,
 			"type":        "upstream_error",
 			"code":        mjErr.Code,
 		})
-		channelId := c.GetInt("channel_id")
-		logger.LogError(c, fmt.Sprintf("relay error (channel #%d, status code %d): %s", channelId, statusCode, fmt.Sprintf("%s %s", mjErr.Description, mjErr.Result)))
 	}
 }
 
 func RelayNotImplemented(c *gin.Context) {
+	message := "API not implemented"
+	if operation_setting.ShouldMaskErrorMessage() {
+		message = MaskedErrorMessage
+	}
 	err := dto.OpenAIError{
-		Message: "API not implemented",
+		Message: message,
 		Type:    "new_api_error",
 		Param:   "",
 		Code:    "api_not_implemented",
@@ -462,8 +480,12 @@ func RelayNotImplemented(c *gin.Context) {
 }
 
 func RelayNotFound(c *gin.Context) {
+	message := fmt.Sprintf("Invalid URL (%s %s)", c.Request.Method, c.Request.URL.Path)
+	if operation_setting.ShouldMaskErrorMessage() {
+		message = MaskedErrorMessage
+	}
 	err := dto.OpenAIError{
-		Message: fmt.Sprintf("Invalid URL (%s %s)", c.Request.Method, c.Request.URL.Path),
+		Message: message,
 		Type:    "invalid_request_error",
 		Param:   "",
 		Code:    "",
@@ -513,6 +535,10 @@ func RelayTask(c *gin.Context) {
 	if taskErr != nil {
 		if taskErr.StatusCode == http.StatusTooManyRequests {
 			taskErr.Message = "当前分组上游负载已饱和，请稍后再试"
+		}
+		// 如果开启了错误伪装，替换返回给用户的消息
+		if operation_setting.ShouldMaskErrorMessage() {
+			taskErr.Message = MaskedErrorMessage
 		}
 		c.JSON(taskErr.StatusCode, taskErr)
 	}

@@ -12,13 +12,20 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 )
 
+const MaskedErrorMessage = "Internal Server Error"
+
 func MidjourneyErrorWrapper(code int, desc string) *dto.MidjourneyResponse {
+	displayDesc := desc
+	if operation_setting.ShouldMaskErrorMessage() {
+		displayDesc = MaskedErrorMessage
+	}
 	return &dto.MidjourneyResponse{
 		Code:        code,
-		Description: desc,
+		Description: displayDesc,
 	}
 }
 
@@ -145,10 +152,15 @@ func TaskErrorWrapper(err error, code string, statusCode int) *dto.TaskError {
 		//text = "请求上游地址失败"
 		text = common.MaskSensitiveInfo(text)
 	}
+	// 如果开启了错误伪装，替换返回给用户的消息
+	displayText := text
+	if operation_setting.ShouldMaskErrorMessage() {
+		displayText = MaskedErrorMessage
+	}
 	//避免暴露内部错误
 	taskError := &dto.TaskError{
 		Code:       code,
-		Message:    text,
+		Message:    displayText,
 		StatusCode: statusCode,
 		Error:      err,
 	}
