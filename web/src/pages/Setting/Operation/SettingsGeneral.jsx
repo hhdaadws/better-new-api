@@ -49,6 +49,7 @@ export default function GeneralSettings(props) {
     'general_setting.quota_display_type': 'USD',
     'general_setting.custom_currency_symbol': '¤',
     'general_setting.custom_currency_exchange_rate': '',
+    'general_setting.mask_error_message': false,
     QuotaPerUnit: '',
     RetryTimes: '',
     USDExchangeRate: '',
@@ -284,6 +285,17 @@ export default function GeneralSettings(props) {
                   checkedText='｜'
                   uncheckedText='〇'
                   onChange={handleFieldChange('SelfUseModeEnabled')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'general_setting.mask_error_message'}
+                  label={t('API错误信息伪装')}
+                  extraText={t('开启后API错误统一返回"Internal Server Error"')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('general_setting.mask_error_message')}
                 />
               </Col>
             </Row>
