@@ -21,6 +21,8 @@ type ChannelSettings struct {
 	SessionConcurrencyExcludeMinutes int  `json:"session_concurrency_exclude_minutes,omitempty"` // 排除时间(分钟,默认2)
 	// Claude 缓存计费设置
 	CacheCreation1hAs5m bool `json:"cache_creation_1h_as_5m,omitempty"` // 1小时缓存创建按5分钟倍率计费
+	// Claude Code 测试伪装
+	ClaudeCodeTestEnabled bool `json:"claude_code_test_enabled,omitempty"` // 是否启用 Claude Code 测试伪装
 }
 
 type VertexKeyType string

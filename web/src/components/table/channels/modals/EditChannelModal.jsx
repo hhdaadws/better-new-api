@@ -166,6 +166,8 @@ const EditChannelModal = (props) => {
     session_concurrency_exclude_minutes: 2,
     // Claude 缓存计费设置
     cache_creation_1h_as_5m: false,
+    // Claude Code 测试伪装
+    claude_code_test_enabled: false,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -379,6 +381,7 @@ const EditChannelModal = (props) => {
     session_concurrency_auto_exclude: false,
     session_concurrency_exclude_minutes: 2,
     cache_creation_1h_as_5m: false,
+    claude_code_test_enabled: false,
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -583,6 +586,9 @@ const EditChannelModal = (props) => {
           // Claude 缓存计费设置
           data.cache_creation_1h_as_5m =
             parsedSettings.cache_creation_1h_as_5m || false;
+          // Claude Code 测试伪装
+          data.claude_code_test_enabled =
+            parsedSettings.claude_code_test_enabled || false;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -601,6 +607,7 @@ const EditChannelModal = (props) => {
           data.session_concurrency_auto_exclude = false;
           data.session_concurrency_exclude_minutes = 2;
           data.cache_creation_1h_as_5m = false;
+          data.claude_code_test_enabled = false;
         }
       } else {
         data.force_format = false;
@@ -619,6 +626,7 @@ const EditChannelModal = (props) => {
         data.session_concurrency_auto_exclude = false;
         data.session_concurrency_exclude_minutes = 2;
         data.cache_creation_1h_as_5m = false;
+        data.claude_code_test_enabled = false;
       }
 
       if (data.settings) {
@@ -963,6 +971,7 @@ const EditChannelModal = (props) => {
       session_concurrency_auto_exclude: false,
       session_concurrency_exclude_minutes: 2,
       cache_creation_1h_as_5m: false,
+      claude_code_test_enabled: false,
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1263,6 +1272,8 @@ const EditChannelModal = (props) => {
       session_concurrency_exclude_minutes: localInputs.session_concurrency_exclude_minutes || 2,
       // Claude 缓存计费设置
       cache_creation_1h_as_5m: localInputs.cache_creation_1h_as_5m || false,
+      // Claude Code 测试伪装
+      claude_code_test_enabled: localInputs.claude_code_test_enabled || false,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -3293,6 +3304,23 @@ const EditChannelModal = (props) => {
                           }
                           extraText={t(
                             '启用后，1小时缓存创建将按5分钟缓存的倍率（1.25x）计费，而非原本的1小时倍率（2.0x）',
+                          )}
+                        />
+
+                        <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>
+                          {t('Claude Code 测试伪装')}
+                        </div>
+
+                        <Form.Switch
+                          field='claude_code_test_enabled'
+                          label={t('启用测试伪装')}
+                          checkedText={t('开')}
+                          uncheckedText={t('关')}
+                          onChange={(value) =>
+                            handleChannelSettingsChange('claude_code_test_enabled', value)
+                          }
+                          extraText={t(
+                            '启用后，测试渠道时将使用 Claude Code 风格的请求头和请求体伪装',
                           )}
                         />
                       </>

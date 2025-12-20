@@ -2,6 +2,8 @@ package controller
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +31,7 @@ import (
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/bytedance/gopkg/util/gopool"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 
 	"github.com/gin-gonic/gin"
@@ -131,6 +134,13 @@ func testChannel(channel *model.Channel, testModel string, endpointType string) 
 		}
 	}
 
+	// 检查是否为 Claude 渠道并启用了 Claude Code 测试伪装
+	channelSetting := channel.GetSetting()
+	isClaudeCodeTest := channel.Type == constant.ChannelTypeAnthropic && channelSetting.ClaudeCodeTestEnabled
+	if isClaudeCodeTest {
+		c.Set("claude_code_test_enabled", true)
+	}
+
 	// Determine relay format based on endpoint type or request path
 	var relayFormat types.RelayFormat
 	if endpointType != "" {
@@ -176,7 +186,16 @@ func testChannel(channel *model.Channel, testModel string, endpointType string) 
 		}
 	}
 
-	request := buildTestRequest(testModel, endpointType)
+	// 构建测试请求
+	var request dto.Request
+	if isClaudeCodeTest {
+		// Claude Code 测试模式：使用特殊的 Claude 请求格式
+		request = buildClaudeCodeTestRequest(testModel)
+		// 强制使用 Claude 格式
+		relayFormat = types.RelayFormatClaude
+	} else {
+		request = buildTestRequest(testModel, endpointType)
+	}
 
 	info, err := relaycommon.GenRelayInfo(c, relayFormat, request, nil)
 
@@ -278,7 +297,10 @@ func testChannel(channel *model.Channel, testModel string, endpointType string) 
 		}
 	default:
 		// Chat/Completion 等其他请求类型
-		if generalReq, ok := request.(*dto.GeneralOpenAIRequest); ok {
+		// 先检查是否为 Claude Code 测试模式的 ClaudeRequest
+		if claudeReq, ok := request.(*dto.ClaudeRequest); ok {
+			convertedRequest, err = adaptor.ConvertClaudeRequest(c, info, claudeReq)
+		} else if generalReq, ok := request.(*dto.GeneralOpenAIRequest); ok {
 			convertedRequest, err = adaptor.ConvertOpenAIRequest(c, info, generalReq)
 		} else {
 			return testResult{
@@ -478,6 +500,55 @@ func buildTestRequest(model string, endpointType string) dto.Request {
 	}
 
 	return testRequest
+}
+
+// generateClaudeCodeUserId 生成 Claude Code 风格的用户ID
+// 格式: user_{64位hex}_account__session_{uuid}
+func generateClaudeCodeUserId() string {
+	// 生成32字节随机数，转为64位十六进制字符串
+	randomBytes := make([]byte, 32)
+	rand.Read(randomBytes)
+	hex64 := hex.EncodeToString(randomBytes)
+
+	// 生成UUID
+	sessionUuid := uuid.New().String()
+
+	return fmt.Sprintf("user_%s_account__session_%s", hex64, sessionUuid)
+}
+
+// buildClaudeCodeTestRequest 构建 Claude Code 风格的测试请求
+func buildClaudeCodeTestRequest(model string) *dto.ClaudeRequest {
+	temperature := 1.0
+	return &dto.ClaudeRequest{
+		Model: model,
+		System: []map[string]any{
+			{
+				"type": "text",
+				"text": "You are Claude Code, Anthropic's official CLI for Claude.",
+				"cache_control": map[string]string{
+					"type": "ephemeral",
+				},
+			},
+		},
+		Messages: []dto.ClaudeMessage{
+			{
+				Role: "user",
+				Content: []map[string]any{
+					{
+						"type": "text",
+						"text": "hi",
+						"cache_control": map[string]string{
+							"type": "ephemeral",
+						},
+					},
+				},
+			},
+		},
+		Metadata:    json.RawMessage(fmt.Sprintf(`{"user_id":"%s"}`, generateClaudeCodeUserId())),
+		MaxTokens:   21333,
+		Temperature: &temperature,
+		Stream:      true,
+	}
 }
 
 func TestChannel(c *gin.Context) {

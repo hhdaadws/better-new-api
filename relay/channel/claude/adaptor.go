@@ -74,15 +74,42 @@ func CommonClaudeHeadersOperation(c *gin.Context, req *http.Header, info *relayc
 	model_setting.GetClaudeSettings().WriteHeaders(info.OriginModelName, req)
 }
 
+// SetupClaudeCodeTestHeaders 设置 Claude Code 测试请求头
+func SetupClaudeCodeTestHeaders(req *http.Header) {
+	// Claude Code SDK 指纹头
+	req.Set("x-stainless-retry-count", "0")
+	req.Set("x-stainless-timeout", "60")
+	req.Set("x-stainless-lang", "js")
+	req.Set("x-stainless-package-version", "0.55.1")
+	req.Set("x-stainless-os", "Windows")
+	req.Set("x-stainless-arch", "x64")
+	req.Set("x-stainless-runtime", "node")
+	req.Set("x-stainless-runtime-version", "v20.19.2")
+	req.Set("anthropic-dangerous-direct-browser-access", "true")
+	req.Set("x-app", "cli")
+	req.Set("User-Agent", "claude-cli/2.0.72 (external, cli)")
+	req.Set("accept-language", "*")
+	req.Set("sec-fetch-mode", "cors")
+	// anthropic-beta 特性
+	req.Set("anthropic-beta", "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14")
+}
+
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, req)
 	req.Set("x-api-key", info.ApiKey)
-	anthropicVersion := c.Request.Header.Get("anthropic-version")
-	if anthropicVersion == "" {
-		anthropicVersion = "2023-06-01"
+
+	// 检查是否启用 Claude Code 测试模式
+	if claudeCodeTest, exists := c.Get("claude_code_test_enabled"); exists && claudeCodeTest.(bool) {
+		SetupClaudeCodeTestHeaders(req)
+	} else {
+		// 正常模式的请求头
+		anthropicVersion := c.Request.Header.Get("anthropic-version")
+		if anthropicVersion == "" {
+			anthropicVersion = "2023-06-01"
+		}
+		req.Set("anthropic-version", anthropicVersion)
+		CommonClaudeHeadersOperation(c, req, info)
 	}
-	req.Set("anthropic-version", anthropicVersion)
-	CommonClaudeHeadersOperation(c, req, info)
 	return nil
 }
 
