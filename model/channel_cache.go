@@ -433,8 +433,22 @@ func getRandomSatisfiedChannelWithCapacity(group string, model string, retry int
 		if sessionId != "" && common.RedisEnabled {
 			availableChannels := filterBySessionCapacity(targetChannels)
 			if len(availableChannels) > 0 {
-				// Use binding-count-based selection for even distribution when all channels
-				// have weight 0 and sticky session enabled
+				// Filter by daily bind limit - prioritize channels within limit
+				channelsWithinDailyLimit := filterByDailyBindLimit(availableChannels)
+
+				// If there are channels within daily limit, use them
+				if len(channelsWithinDailyLimit) > 0 {
+					if shouldUseBindingCountSelection(channelsWithinDailyLimit) {
+						return selectByBindingCount(channelsWithinDailyLimit)
+					}
+					return selectByWeight(channelsWithinDailyLimit)
+				}
+
+				// All channels exceeded daily limit, fall back to normal selection
+				// This ensures service is not blocked
+				if common.DebugEnabled {
+					common.SysLog("All channels exceeded daily bind limit, falling back to normal selection")
+				}
 				if shouldUseBindingCountSelection(availableChannels) {
 					return selectByBindingCount(availableChannels)
 				}
@@ -500,6 +514,44 @@ func filterBySessionCapacity(channels []*Channel) []*Channel {
 
 		if currentCount < setting.StickySessionMaxCount {
 			result = append(result, channel)
+		}
+	}
+	return result
+}
+
+// filterByDailyBindLimit filters out channels that have exceeded their daily bind limit
+func filterByDailyBindLimit(channels []*Channel) []*Channel {
+	result := make([]*Channel, 0)
+	for _, channel := range channels {
+		setting := channel.GetSetting()
+
+		// Channel doesn't use sticky sessions, always available
+		if !setting.StickySessionEnabled {
+			result = append(result, channel)
+			continue
+		}
+
+		// No daily bind limit
+		if setting.StickySessionDailyBindLimit <= 0 {
+			result = append(result, channel)
+			continue
+		}
+
+		// Check if daily bind limit exceeded
+		exceeded, err := common.IsChannelDailyBindLimitExceeded(channel.Id, setting.StickySessionDailyBindLimit)
+		if err != nil {
+			// Error checking, include channel (optimistic)
+			if common.DebugEnabled {
+				common.SysLog(fmt.Sprintf("Error checking daily bind limit for channel %d: %v", channel.Id, err))
+			}
+			result = append(result, channel)
+			continue
+		}
+
+		if !exceeded {
+			result = append(result, channel)
+		} else if common.DebugEnabled {
+			common.SysLog(fmt.Sprintf("Channel %d exceeded daily bind limit (%d)", channel.Id, setting.StickySessionDailyBindLimit))
 		}
 	}
 	return result
@@ -629,5 +681,26 @@ func BindStickySession(group, model, sessionId string, channel *Channel, usernam
 		ttl = 60 // Default 60 minutes
 	}
 
-	return common.SetStickySession(group, model, sessionId, channel.Id, ttl, username, tokenName)
+	// Check if this is a new binding (not renewal)
+	existingChannelId, _ := common.GetStickySessionChannel(group, model, sessionId)
+	isNewBinding := existingChannelId == 0 || existingChannelId != channel.Id
+
+	// Set/update sticky session binding
+	err := common.SetStickySession(group, model, sessionId, channel.Id, ttl, username, tokenName)
+	if err != nil {
+		return err
+	}
+
+	// Increment daily bind count only for new bindings
+	if isNewBinding && setting.StickySessionDailyBindLimit > 0 {
+		_, incrErr := common.IncrementChannelDailyBindCount(channel.Id)
+		if incrErr != nil {
+			// Log error but don't fail the binding (count is only for scheduling priority)
+			if common.DebugEnabled {
+				common.SysLog(fmt.Sprintf("Failed to increment daily bind count for channel %d: %v", channel.Id, incrErr))
+			}
+		}
+	}
+
+	return nil
 }

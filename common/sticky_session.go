@@ -525,3 +525,100 @@ func ClearChannelSessionExcluded(channelId int) error {
 
 	return RDB.Del(ctx, key).Err()
 }
+
+// ============= Daily Bind Limit Functions =============
+
+const (
+	StickySessionDailyBindPrefix = "sticky_session_daily_bind:"
+)
+
+// singaporeLocation is the timezone for daily reset
+var singaporeLocation *time.Location
+
+func init() {
+	var err error
+	singaporeLocation, err = time.LoadLocation("Asia/Singapore")
+	if err != nil {
+		// Fallback to fixed offset if timezone data not available
+		singaporeLocation = time.FixedZone("SGT", 8*60*60)
+	}
+}
+
+// getSingaporeDate returns current date string in Singapore timezone (YYYY-MM-DD)
+func getSingaporeDate() string {
+	return time.Now().In(singaporeLocation).Format("2006-01-02")
+}
+
+// getTTLUntilSingaporeMidnight returns duration until midnight in Singapore timezone
+func getTTLUntilSingaporeMidnight() time.Duration {
+	now := time.Now().In(singaporeLocation)
+	midnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, singaporeLocation)
+	return midnight.Sub(now)
+}
+
+// GetStickySessionDailyBindKey returns the Redis key for channel daily bind count
+func GetStickySessionDailyBindKey(channelId int) string {
+	date := getSingaporeDate()
+	return fmt.Sprintf("%s%d:%s", StickySessionDailyBindPrefix, channelId, date)
+}
+
+// GetChannelDailyBindCount returns the daily bind count for a channel
+func GetChannelDailyBindCount(channelId int) (int, error) {
+	if !RedisEnabled {
+		return 0, nil
+	}
+	ctx := context.Background()
+	key := GetStickySessionDailyBindKey(channelId)
+
+	val, err := RDB.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	count, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// IncrementChannelDailyBindCount increments the daily bind count for a channel
+// Returns the new count after increment
+func IncrementChannelDailyBindCount(channelId int) (int, error) {
+	if !RedisEnabled {
+		return 0, nil
+	}
+	ctx := context.Background()
+	key := GetStickySessionDailyBindKey(channelId)
+
+	// Atomic increment
+	newCount, err := RDB.Incr(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+
+	// If this is a new key (count is 1), set TTL until Singapore midnight
+	if newCount == 1 {
+		ttl := getTTLUntilSingaporeMidnight()
+		RDB.Expire(ctx, key, ttl)
+	}
+
+	return int(newCount), nil
+}
+
+// IsChannelDailyBindLimitExceeded checks if a channel has exceeded its daily bind limit
+func IsChannelDailyBindLimitExceeded(channelId int, dailyLimit int) (bool, error) {
+	if dailyLimit <= 0 {
+		return false, nil // 0 means no limit
+	}
+
+	count, err := GetChannelDailyBindCount(channelId)
+	if err != nil {
+		return false, err
+	}
+
+	return count >= dailyLimit, nil
+}

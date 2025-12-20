@@ -13,9 +13,10 @@ type ChannelSettings struct {
 	ContentAuditEnabled  bool   `json:"content_audit_enabled,omitempty"`  // 是否启用内容审核
 	ContentAuditKeywords string `json:"content_audit_keywords,omitempty"` // 内容审核关键词，换行分隔
 	// 粘性会话功能
-	StickySessionEnabled    bool `json:"sticky_session_enabled,omitempty"`     // 是否启用粘性会话
-	StickySessionMaxCount   int  `json:"sticky_session_max_count,omitempty"`   // 最大会话数(0=无限制)
-	StickySessionTTLMinutes int  `json:"sticky_session_ttl_minutes,omitempty"` // 会话过期时间(分钟，默认60)
+	StickySessionEnabled        bool `json:"sticky_session_enabled,omitempty"`          // 是否启用粘性会话
+	StickySessionMaxCount       int  `json:"sticky_session_max_count,omitempty"`        // 最大会话数(0=无限制)
+	StickySessionTTLMinutes     int  `json:"sticky_session_ttl_minutes,omitempty"`      // 会话过期时间(分钟，默认60)
+	StickySessionDailyBindLimit int  `json:"sticky_session_daily_bind_limit,omitempty"` // 每日绑定额度上限(0=无限制)
 	// Session并发错误自动排除
 	SessionConcurrencyAutoExclude    bool `json:"session_concurrency_auto_exclude,omitempty"`    // 并发错误自动排除
 	SessionConcurrencyExcludeMinutes int  `json:"session_concurrency_exclude_minutes,omitempty"` // 排除时间(分钟,默认2)
