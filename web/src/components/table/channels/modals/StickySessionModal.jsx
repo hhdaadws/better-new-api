@@ -154,6 +154,13 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
   const usagePercent =
     maxCount > 0 ? Math.min(Math.round((sessionCount / maxCount) * 100), 100) : 0;
 
+  // Daily bind info
+  const dailyBindLimit = sessionInfo?.daily_bind_limit || 0;
+  const dailyBindCount = sessionInfo?.daily_bind_count || 0;
+  const dailyBindRemaining = dailyBindLimit > 0 ? Math.max(dailyBindLimit - dailyBindCount, 0) : -1;
+  const dailyBindPercent =
+    dailyBindLimit > 0 ? Math.min(Math.round((dailyBindCount / dailyBindLimit) * 100), 100) : 0;
+
   // Format TTL display
   const formatTTL = (seconds) => {
     if (seconds <= 0) return t('已过期');
@@ -401,6 +408,59 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
               </div>
             </Col>
           </Row>
+          {/* Daily Bind Limit - only show if configured */}
+          {dailyBindLimit > 0 && (
+            <Row gutter={16} align='middle' style={{ marginTop: 12 }}>
+              <Col span={24}>
+                <div
+                  style={{
+                    background: 'var(--semi-color-bg-0)',
+                    border: '1px solid var(--semi-color-border)',
+                    borderRadius: 12,
+                    padding: 12,
+                  }}
+                >
+                  <div className='flex items-center gap-2 mb-2'>
+                    <Badge dot style={{ backgroundColor: '#8b5cf6' }} />
+                    <Text type='tertiary'>{t('今日绑定额度')}</Text>
+                  </div>
+                  <div className='flex items-center gap-4'>
+                    <div className='flex items-end gap-2'>
+                      <Text
+                        style={{ fontSize: 24, fontWeight: 700, color: '#8b5cf6' }}
+                      >
+                        {dailyBindCount}
+                      </Text>
+                      <Text
+                        style={{ fontSize: 18, color: 'var(--semi-color-text-2)' }}
+                      >
+                        / {dailyBindLimit}
+                      </Text>
+                    </div>
+                    <div style={{ flex: 1, maxWidth: 200 }}>
+                      <Progress
+                        percent={dailyBindPercent}
+                        showInfo={false}
+                        size='small'
+                        stroke={dailyBindPercent >= 100 ? '#ef4444' : dailyBindPercent >= 80 ? '#f59e0b' : '#8b5cf6'}
+                        style={{ height: 6, borderRadius: 999 }}
+                      />
+                    </div>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: dailyBindRemaining === 0 ? '#ef4444' : 'var(--semi-color-text-2)',
+                      }}
+                    >
+                      {dailyBindRemaining === 0
+                        ? t('已用尽')
+                        : t('剩余 {{count}}', { count: dailyBindRemaining })}
+                    </Text>
+                  </div>
+                </div>
+              </Col>
+            </Row>
+          )}
         </div>
 
         {/* Table */}
