@@ -161,6 +161,7 @@ const EditChannelModal = (props) => {
     sticky_session_enabled: false,
     sticky_session_max_count: 0,
     sticky_session_ttl_minutes: 60,
+    sticky_session_daily_bind_limit: 0,
     // Session并发错误自动排除
     session_concurrency_auto_exclude: false,
     session_concurrency_exclude_minutes: 2,
@@ -378,6 +379,7 @@ const EditChannelModal = (props) => {
     sticky_session_enabled: false,
     sticky_session_max_count: 0,
     sticky_session_ttl_minutes: 60,
+    sticky_session_daily_bind_limit: 0,
     session_concurrency_auto_exclude: false,
     session_concurrency_exclude_minutes: 2,
     cache_creation_1h_as_5m: false,
@@ -578,6 +580,8 @@ const EditChannelModal = (props) => {
             parsedSettings.sticky_session_max_count || 0;
           data.sticky_session_ttl_minutes =
             parsedSettings.sticky_session_ttl_minutes || 60;
+          data.sticky_session_daily_bind_limit =
+            parsedSettings.sticky_session_daily_bind_limit || 0;
           // Session并发错误自动排除设置
           data.session_concurrency_auto_exclude =
             parsedSettings.session_concurrency_auto_exclude || false;
@@ -604,6 +608,7 @@ const EditChannelModal = (props) => {
           data.sticky_session_enabled = false;
           data.sticky_session_max_count = 0;
           data.sticky_session_ttl_minutes = 60;
+          data.sticky_session_daily_bind_limit = 0;
           data.session_concurrency_auto_exclude = false;
           data.session_concurrency_exclude_minutes = 2;
           data.cache_creation_1h_as_5m = false;
@@ -623,6 +628,7 @@ const EditChannelModal = (props) => {
         data.sticky_session_enabled = false;
         data.sticky_session_max_count = 0;
         data.sticky_session_ttl_minutes = 60;
+        data.sticky_session_daily_bind_limit = 0;
         data.session_concurrency_auto_exclude = false;
         data.session_concurrency_exclude_minutes = 2;
         data.cache_creation_1h_as_5m = false;
@@ -968,6 +974,7 @@ const EditChannelModal = (props) => {
       sticky_session_enabled: false,
       sticky_session_max_count: 0,
       sticky_session_ttl_minutes: 60,
+      sticky_session_daily_bind_limit: 0,
       session_concurrency_auto_exclude: false,
       session_concurrency_exclude_minutes: 2,
       cache_creation_1h_as_5m: false,
@@ -1267,6 +1274,7 @@ const EditChannelModal = (props) => {
       sticky_session_enabled: localInputs.sticky_session_enabled || false,
       sticky_session_max_count: localInputs.sticky_session_max_count || 0,
       sticky_session_ttl_minutes: localInputs.sticky_session_ttl_minutes || 60,
+      sticky_session_daily_bind_limit: localInputs.sticky_session_daily_bind_limit || 0,
       // Session并发错误自动排除设置
       session_concurrency_auto_exclude: localInputs.session_concurrency_auto_exclude || false,
       session_concurrency_exclude_minutes: localInputs.session_concurrency_exclude_minutes || 2,
@@ -3251,6 +3259,19 @@ const EditChannelModal = (props) => {
                           style={{ width: '100%' }}
                           extraText={t(
                             '会话绑定的过期时间，超时后绑定关系将自动解除。每次请求会自动续期',
+                          )}
+                        />
+                        <Form.InputNumber
+                          field='sticky_session_daily_bind_limit'
+                          label={t('每日绑定额度')}
+                          placeholder={t('0 表示无限制')}
+                          min={0}
+                          onNumberChange={(value) =>
+                            handleChannelSettingsChange('sticky_session_daily_bind_limit', value)
+                          }
+                          style={{ width: '100%' }}
+                          extraText={t(
+                            '该渠道每日可新增绑定的会话数上限，0 表示无限制。超额渠道将被降低优先级，但不会完全阻止绑定',
                           )}
                         />
 
