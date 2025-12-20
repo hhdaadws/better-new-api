@@ -48,6 +48,7 @@ const OperationSetting = () => {
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
+    'general_setting.mask_error_message': false,
 
     /* 顶栏模块管理 */
     HeaderNavModules: '',

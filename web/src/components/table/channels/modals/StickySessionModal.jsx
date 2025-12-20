@@ -168,6 +168,18 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
     return quota.toString();
   };
 
+  // Format quota with USD (500000 = $1)
+  const formatQuotaWithUSD = (quota) => {
+    const usd = quota / 500000;
+    if (quota >= 1000000) {
+      return `${(quota / 1000000).toFixed(1)}M ($${usd.toFixed(2)})`;
+    }
+    if (quota >= 1000) {
+      return `${(quota / 1000).toFixed(0)}K ($${usd.toFixed(2)})`;
+    }
+    return `${quota} ($${usd.toFixed(2)})`;
+  };
+
   // Format TTL display
   const formatTTL = (seconds) => {
     if (seconds <= 0) return t('已过期');
@@ -436,12 +448,12 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
                       <Text
                         style={{ fontSize: 24, fontWeight: 700, color: '#8b5cf6' }}
                       >
-                        {formatQuota(dailyQuotaUsed)}
+                        {formatQuotaWithUSD(dailyQuotaUsed)}
                       </Text>
                       <Text
                         style={{ fontSize: 18, color: 'var(--semi-color-text-2)' }}
                       >
-                        / {formatQuota(dailyQuotaLimit)}
+                        / {formatQuotaWithUSD(dailyQuotaLimit)}
                       </Text>
                     </div>
                     <div style={{ flex: 1, maxWidth: 200 }}>
@@ -461,7 +473,7 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
                     >
                       {dailyQuotaRemaining === 0
                         ? t('已用尽')
-                        : t('剩余 {{count}}', { count: formatQuota(dailyQuotaRemaining) })}
+                        : t('剩余 {{count}}', { count: formatQuotaWithUSD(dailyQuotaRemaining) })}
                     </Text>
                   </div>
                 </div>
