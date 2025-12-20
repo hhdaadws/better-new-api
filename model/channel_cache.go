@@ -433,6 +433,11 @@ func getRandomSatisfiedChannelWithCapacity(group string, model string, retry int
 		if sessionId != "" && common.RedisEnabled {
 			availableChannels := filterBySessionCapacity(targetChannels)
 			if len(availableChannels) > 0 {
+				// Use binding-count-based selection for even distribution when all channels
+				// have weight 0 and sticky session enabled
+				if shouldUseBindingCountSelection(availableChannels) {
+					return selectByBindingCount(availableChannels)
+				}
 				return selectByWeight(availableChannels)
 			}
 			// No available channels at this priority, try next priority level
@@ -498,6 +503,74 @@ func filterBySessionCapacity(channels []*Channel) []*Channel {
 		}
 	}
 	return result
+}
+
+// shouldUseBindingCountSelection checks if binding-count-based selection should be used
+// Returns true when all channels have weight 0 and sticky session enabled
+func shouldUseBindingCountSelection(channels []*Channel) bool {
+	if len(channels) <= 1 {
+		return false
+	}
+	for _, channel := range channels {
+		if channel.GetWeight() != 0 {
+			return false
+		}
+		setting := channel.GetSetting()
+		if !setting.StickySessionEnabled {
+			return false
+		}
+	}
+	return true
+}
+
+// selectByBindingCount selects channel with fewest sticky session bindings
+// This ensures even distribution of sticky sessions across channels
+func selectByBindingCount(channels []*Channel) (*Channel, error) {
+	if len(channels) == 0 {
+		return nil, errors.New("no channels available")
+	}
+	if len(channels) == 1 {
+		return channels[0], nil
+	}
+
+	type channelWithCount struct {
+		channel *Channel
+		count   int
+	}
+
+	channelCounts := make([]channelWithCount, 0, len(channels))
+	for _, channel := range channels {
+		count := 0
+		if common.RedisEnabled {
+			c, err := common.GetChannelStickySessionCount(channel.Id)
+			if err == nil {
+				count = c
+			}
+		}
+		channelCounts = append(channelCounts, channelWithCount{channel: channel, count: count})
+	}
+
+	// Find minimum binding count
+	minCount := channelCounts[0].count
+	for _, cc := range channelCounts[1:] {
+		if cc.count < minCount {
+			minCount = cc.count
+		}
+	}
+
+	// Filter channels with minimum binding count
+	candidates := make([]*Channel, 0)
+	for _, cc := range channelCounts {
+		if cc.count == minCount {
+			candidates = append(candidates, cc.channel)
+		}
+	}
+
+	// Random selection among candidates with equal min count
+	if len(candidates) == 1 {
+		return candidates[0], nil
+	}
+	return candidates[rand.Intn(len(candidates))], nil
 }
 
 // selectByWeight selects a channel from the list based on weight
