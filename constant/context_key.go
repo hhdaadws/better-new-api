@@ -51,7 +51,8 @@ const (
 	ContextKeySystemPromptOverride ContextKey = "system_prompt_override"
 
 	/* sticky session related keys */
-	ContextKeyStickySessionId ContextKey = "sticky_session_id"
+	ContextKeyStickySessionId        ContextKey = "sticky_session_id"
+	ContextKeyStickySessionChannelId ContextKey = "sticky_session_channel_id" // 通过粘性会话绑定的渠道ID
 
 	/* free cache creation related keys */
 	ContextKeyFreeCacheCreation    ContextKey = "free_cache_creation"     // 是否免费缓存创建

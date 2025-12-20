@@ -35,14 +35,14 @@ func GetChannelStickySessions(c *gin.Context) {
 			"success": true,
 			"message": "该渠道未启用粘性会话",
 			"data": model.StickySessionInfo{
-				ChannelId:      id,
-				ChannelName:    channel.Name,
-				SessionCount:   0,
-				MaxCount:       0,
-				TTLMinutes:     0,
-				DailyBindLimit: 0,
-				DailyBindCount: 0,
-				Sessions:       []model.StickySession{},
+				ChannelId:       id,
+				ChannelName:     channel.Name,
+				SessionCount:    0,
+				MaxCount:        0,
+				TTLMinutes:      0,
+				DailyQuotaLimit: 0,
+				DailyQuotaUsed:  0,
+				Sessions:        []model.StickySession{},
 			},
 		})
 		return
@@ -73,20 +73,20 @@ func GetChannelStickySessions(c *gin.Context) {
 		})
 	}
 
-	// Get daily bind count
-	dailyBindCount, _ := common.GetChannelDailyBindCount(id)
+	// Get daily quota usage
+	dailyQuotaUsed, _ := common.GetChannelDailyQuotaUsed(id)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": model.StickySessionInfo{
-			ChannelId:      id,
-			ChannelName:    channel.Name,
-			SessionCount:   len(sessionList),
-			MaxCount:       setting.StickySessionMaxCount,
-			TTLMinutes:     setting.StickySessionTTLMinutes,
-			DailyBindLimit: setting.StickySessionDailyBindLimit,
-			DailyBindCount: dailyBindCount,
-			Sessions:       sessionList,
+			ChannelId:       id,
+			ChannelName:     channel.Name,
+			SessionCount:    len(sessionList),
+			MaxCount:        setting.StickySessionMaxCount,
+			TTLMinutes:      setting.StickySessionTTLMinutes,
+			DailyQuotaLimit: setting.StickySessionDailyQuotaLimit,
+			DailyQuotaUsed:  dailyQuotaUsed,
+			Sessions:        sessionList,
 		},
 	})
 }
@@ -191,15 +191,15 @@ func GetAllStickySessionStats(c *gin.Context) {
 		}
 
 		count, _ := common.GetChannelStickySessionCount(channel.Id)
-		dailyBindCount, _ := common.GetChannelDailyBindCount(channel.Id)
+		dailyQuotaUsed, _ := common.GetChannelDailyQuotaUsed(channel.Id)
 		stats = append(stats, model.StickySessionInfo{
-			ChannelId:      channel.Id,
-			ChannelName:    channel.Name,
-			SessionCount:   count,
-			MaxCount:       setting.StickySessionMaxCount,
-			TTLMinutes:     setting.StickySessionTTLMinutes,
-			DailyBindLimit: setting.StickySessionDailyBindLimit,
-			DailyBindCount: dailyBindCount,
+			ChannelId:       channel.Id,
+			ChannelName:     channel.Name,
+			SessionCount:    count,
+			MaxCount:        setting.StickySessionMaxCount,
+			TTLMinutes:      setting.StickySessionTTLMinutes,
+			DailyQuotaLimit: setting.StickySessionDailyQuotaLimit,
+			DailyQuotaUsed:  dailyQuotaUsed,
 		})
 	}
 

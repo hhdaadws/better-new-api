@@ -83,6 +83,9 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 		}
 		if bindErr := model.BindStickySession(selectGroup, modelName, sessionId, channel, username, tokenName); bindErr != nil {
 			logger.LogWarn(c, "Failed to bind sticky session: "+bindErr.Error())
+		} else {
+			// Mark this request as using sticky session for quota tracking
+			common.SetContextKey(c, constant.ContextKeyStickySessionChannelId, channel.Id)
 		}
 	} else if common.DebugEnabled && channel != nil && sessionId == "" {
 		common.SysLog("Sticky session not bound: sessionId is empty")

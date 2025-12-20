@@ -526,10 +526,10 @@ func ClearChannelSessionExcluded(channelId int) error {
 	return RDB.Del(ctx, key).Err()
 }
 
-// ============= Daily Bind Limit Functions =============
+// ============= Daily Quota Limit Functions =============
 
 const (
-	StickySessionDailyBindPrefix = "sticky_session_daily_bind:"
+	StickySessionDailyQuotaPrefix = "sticky_session_daily_quota:"
 )
 
 // singaporeLocation is the timezone for daily reset
@@ -556,19 +556,19 @@ func getTTLUntilSingaporeMidnight() time.Duration {
 	return midnight.Sub(now)
 }
 
-// GetStickySessionDailyBindKey returns the Redis key for channel daily bind count
-func GetStickySessionDailyBindKey(channelId int) string {
+// GetStickySessionDailyQuotaKey returns the Redis key for channel daily quota usage
+func GetStickySessionDailyQuotaKey(channelId int) string {
 	date := getSingaporeDate()
-	return fmt.Sprintf("%s%d:%s", StickySessionDailyBindPrefix, channelId, date)
+	return fmt.Sprintf("%s%d:%s", StickySessionDailyQuotaPrefix, channelId, date)
 }
 
-// GetChannelDailyBindCount returns the daily bind count for a channel
-func GetChannelDailyBindCount(channelId int) (int, error) {
+// GetChannelDailyQuotaUsed returns the daily quota usage for a channel
+func GetChannelDailyQuotaUsed(channelId int) (int, error) {
 	if !RedisEnabled {
 		return 0, nil
 	}
 	ctx := context.Background()
-	key := GetStickySessionDailyBindKey(channelId)
+	key := GetStickySessionDailyQuotaKey(channelId)
 
 	val, err := RDB.Get(ctx, key).Result()
 	if err == redis.Nil {
@@ -578,47 +578,50 @@ func GetChannelDailyBindCount(channelId int) (int, error) {
 		return 0, err
 	}
 
-	count, err := strconv.Atoi(val)
+	quota, err := strconv.Atoi(val)
 	if err != nil {
 		return 0, err
 	}
-	return count, nil
+	return quota, nil
 }
 
-// IncrementChannelDailyBindCount increments the daily bind count for a channel
-// Returns the new count after increment
-func IncrementChannelDailyBindCount(channelId int) (int, error) {
-	if !RedisEnabled {
+// AddChannelDailyQuota adds consumed quota to the channel's daily total
+// Returns the new total after addition
+func AddChannelDailyQuota(channelId int, quota int) (int, error) {
+	if !RedisEnabled || quota <= 0 {
 		return 0, nil
 	}
 	ctx := context.Background()
-	key := GetStickySessionDailyBindKey(channelId)
+	key := GetStickySessionDailyQuotaKey(channelId)
 
-	// Atomic increment
-	newCount, err := RDB.Incr(ctx, key).Result()
+	// Check if key exists to determine if we need to set TTL
+	exists, _ := RDB.Exists(ctx, key).Result()
+
+	// Atomic increment by quota amount
+	newTotal, err := RDB.IncrBy(ctx, key, int64(quota)).Result()
 	if err != nil {
 		return 0, err
 	}
 
-	// If this is a new key (count is 1), set TTL until Singapore midnight
-	if newCount == 1 {
+	// If this is a new key, set TTL until Singapore midnight
+	if exists == 0 {
 		ttl := getTTLUntilSingaporeMidnight()
 		RDB.Expire(ctx, key, ttl)
 	}
 
-	return int(newCount), nil
+	return int(newTotal), nil
 }
 
-// IsChannelDailyBindLimitExceeded checks if a channel has exceeded its daily bind limit
-func IsChannelDailyBindLimitExceeded(channelId int, dailyLimit int) (bool, error) {
+// IsChannelDailyQuotaLimitExceeded checks if a channel has exceeded its daily quota limit
+func IsChannelDailyQuotaLimitExceeded(channelId int, dailyLimit int) (bool, error) {
 	if dailyLimit <= 0 {
 		return false, nil // 0 means no limit
 	}
 
-	count, err := GetChannelDailyBindCount(channelId)
+	used, err := GetChannelDailyQuotaUsed(channelId)
 	if err != nil {
 		return false, err
 	}
 
-	return count >= dailyLimit, nil
+	return used >= dailyLimit, nil
 }

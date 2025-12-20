@@ -154,12 +154,19 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
   const usagePercent =
     maxCount > 0 ? Math.min(Math.round((sessionCount / maxCount) * 100), 100) : 0;
 
-  // Daily bind info
-  const dailyBindLimit = sessionInfo?.daily_bind_limit || 0;
-  const dailyBindCount = sessionInfo?.daily_bind_count || 0;
-  const dailyBindRemaining = dailyBindLimit > 0 ? Math.max(dailyBindLimit - dailyBindCount, 0) : -1;
-  const dailyBindPercent =
-    dailyBindLimit > 0 ? Math.min(Math.round((dailyBindCount / dailyBindLimit) * 100), 100) : 0;
+  // Daily quota info
+  const dailyQuotaLimit = sessionInfo?.daily_quota_limit || 0;
+  const dailyQuotaUsed = sessionInfo?.daily_quota_used || 0;
+  const dailyQuotaRemaining = dailyQuotaLimit > 0 ? Math.max(dailyQuotaLimit - dailyQuotaUsed, 0) : -1;
+  const dailyQuotaPercent =
+    dailyQuotaLimit > 0 ? Math.min(Math.round((dailyQuotaUsed / dailyQuotaLimit) * 100), 100) : 0;
+
+  // Format quota for display (e.g., 500000 -> 500K, 5000000 -> 5M)
+  const formatQuota = (quota) => {
+    if (quota >= 1000000) return `${(quota / 1000000).toFixed(1)}M`;
+    if (quota >= 1000) return `${(quota / 1000).toFixed(0)}K`;
+    return quota.toString();
+  };
 
   // Format TTL display
   const formatTTL = (seconds) => {
@@ -408,8 +415,8 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
               </div>
             </Col>
           </Row>
-          {/* Daily Bind Limit - only show if configured */}
-          {dailyBindLimit > 0 && (
+          {/* Daily Quota Limit - only show if configured */}
+          {dailyQuotaLimit > 0 && (
             <Row gutter={16} align='middle' style={{ marginTop: 12 }}>
               <Col span={24}>
                 <div
@@ -422,39 +429,39 @@ const StickySessionModal = ({ visible, onCancel, channel, onRefresh }) => {
                 >
                   <div className='flex items-center gap-2 mb-2'>
                     <Badge dot style={{ backgroundColor: '#8b5cf6' }} />
-                    <Text type='tertiary'>{t('今日绑定额度')}</Text>
+                    <Text type='tertiary'>{t('今日消费额度')}</Text>
                   </div>
                   <div className='flex items-center gap-4'>
                     <div className='flex items-end gap-2'>
                       <Text
                         style={{ fontSize: 24, fontWeight: 700, color: '#8b5cf6' }}
                       >
-                        {dailyBindCount}
+                        {formatQuota(dailyQuotaUsed)}
                       </Text>
                       <Text
                         style={{ fontSize: 18, color: 'var(--semi-color-text-2)' }}
                       >
-                        / {dailyBindLimit}
+                        / {formatQuota(dailyQuotaLimit)}
                       </Text>
                     </div>
                     <div style={{ flex: 1, maxWidth: 200 }}>
                       <Progress
-                        percent={dailyBindPercent}
+                        percent={dailyQuotaPercent}
                         showInfo={false}
                         size='small'
-                        stroke={dailyBindPercent >= 100 ? '#ef4444' : dailyBindPercent >= 80 ? '#f59e0b' : '#8b5cf6'}
+                        stroke={dailyQuotaPercent >= 100 ? '#ef4444' : dailyQuotaPercent >= 80 ? '#f59e0b' : '#8b5cf6'}
                         style={{ height: 6, borderRadius: 999 }}
                       />
                     </div>
                     <Text
                       style={{
                         fontSize: 14,
-                        color: dailyBindRemaining === 0 ? '#ef4444' : 'var(--semi-color-text-2)',
+                        color: dailyQuotaRemaining === 0 ? '#ef4444' : 'var(--semi-color-text-2)',
                       }}
                     >
-                      {dailyBindRemaining === 0
+                      {dailyQuotaRemaining === 0
                         ? t('已用尽')
-                        : t('剩余 {{count}}', { count: dailyBindRemaining })}
+                        : t('剩余 {{count}}', { count: formatQuota(dailyQuotaRemaining) })}
                     </Text>
                   </div>
                 </div>

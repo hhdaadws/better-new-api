@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/types"
 
@@ -177,6 +178,18 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 		gopool.Go(func() {
 			LogQuotaData(userId, username, params.ModelName, params.Quota, common.GetTimestamp(), params.PromptTokens+params.CompletionTokens)
 		})
+	}
+
+	// Track quota consumption for sticky session channels
+	if params.Quota > 0 {
+		stickyChannelId := common.GetContextKeyInt(c, constant.ContextKeyStickySessionChannelId)
+		if stickyChannelId > 0 && stickyChannelId == params.ChannelId {
+			_, err := common.AddChannelDailyQuota(params.ChannelId, params.Quota)
+			if err != nil && common.DebugEnabled {
+				common.SysLog(fmt.Sprintf("Failed to add sticky session quota: channelId=%d, quota=%d, err=%v",
+					params.ChannelId, params.Quota, err))
+			}
+		}
 	}
 }
 

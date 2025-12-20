@@ -14,12 +14,12 @@ type StickySession struct {
 
 // StickySessionInfo for API responses
 type StickySessionInfo struct {
-	ChannelId      int             `json:"channel_id"`
-	ChannelName    string          `json:"channel_name"`
-	SessionCount   int             `json:"session_count"`
-	MaxCount       int             `json:"max_count"`
-	TTLMinutes     int             `json:"ttl_minutes"`
-	DailyBindLimit int             `json:"daily_bind_limit"` // 每日绑定上限
-	DailyBindCount int             `json:"daily_bind_count"` // 今日已绑定数量
-	Sessions       []StickySession `json:"sessions,omitempty"`
+	ChannelId       int             `json:"channel_id"`
+	ChannelName     string          `json:"channel_name"`
+	SessionCount    int             `json:"session_count"`
+	MaxCount        int             `json:"max_count"`
+	TTLMinutes      int             `json:"ttl_minutes"`
+	DailyQuotaLimit int             `json:"daily_quota_limit"` // 每日消费额度上限
+	DailyQuotaUsed  int             `json:"daily_quota_used"`  // 今日已消费额度
+	Sessions        []StickySession `json:"sessions,omitempty"`
 }
