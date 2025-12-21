@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/setting/system_setting"
 	"github.com/QuantumNous/new-api/types"
@@ -43,26 +44,26 @@ func ShouldApplyHiddenRatio(modelName string, cacheCreationTokens int, cacheRead
 		return false
 	}
 
-	// 最大上下文 200k，安全阈值 75% = 150k
-	const maxContextThreshold = 200000 * 0.75 // 150k
+	// 从系统设置获取阈值（默认 150k）
+	threshold := float64(operation_setting.GetHiddenRatioThreshold())
 
 	// 检查 cache_creation_tokens
 	// 条件1：cache_creation_tokens 本身已超过阈值
-	if float64(cacheCreationTokens) > maxContextThreshold {
+	if float64(cacheCreationTokens) > threshold {
 		return false
 	}
 	// 条件2：应用倍率后会超过阈值
-	if float64(cacheCreationTokens)*hiddenRatio > maxContextThreshold {
+	if float64(cacheCreationTokens)*hiddenRatio > threshold {
 		return false
 	}
 
 	// 检查 cache_read_tokens（缓存读取）
 	// 条件3：cache_read_tokens 本身已超过阈值
-	if float64(cacheReadTokens) > maxContextThreshold {
+	if float64(cacheReadTokens) > threshold {
 		return false
 	}
 	// 条件4：应用倍率后会超过阈值
-	if float64(cacheReadTokens)*hiddenRatio > maxContextThreshold {
+	if float64(cacheReadTokens)*hiddenRatio > threshold {
 		return false
 	}
 

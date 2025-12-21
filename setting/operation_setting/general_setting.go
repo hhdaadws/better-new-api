@@ -22,6 +22,8 @@ type GeneralSetting struct {
 	CustomCurrencyExchangeRate float64 `json:"custom_currency_exchange_rate"`
 	// 是否将API错误信息伪装为通用错误，避免暴露真实错误给用户
 	MaskErrorMessage bool `json:"mask_error_message"`
+	// 隐藏倍率阈值：当缓存 tokens 超过此值时不应用隐藏倍率（默认 150000，即 150k）
+	HiddenRatioThreshold int `json:"hidden_ratio_threshold"`
 }
 
 // 默认配置
@@ -33,6 +35,7 @@ var generalSetting = GeneralSetting{
 	CustomCurrencySymbol:       "¤",
 	CustomCurrencyExchangeRate: 1.0,
 	MaskErrorMessage:           false,
+	HiddenRatioThreshold:       150000,
 }
 
 func init() {
@@ -96,4 +99,12 @@ func GetUsdToCurrencyRate(usdToCny float64) float64 {
 // ShouldMaskErrorMessage 返回是否应该伪装API错误信息
 func ShouldMaskErrorMessage() bool {
 	return generalSetting.MaskErrorMessage
+}
+
+// GetHiddenRatioThreshold 返回隐藏倍率阈值
+func GetHiddenRatioThreshold() int {
+	if generalSetting.HiddenRatioThreshold <= 0 {
+		return 150000 // 默认 150k
+	}
+	return generalSetting.HiddenRatioThreshold
 }
