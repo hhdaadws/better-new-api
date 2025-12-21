@@ -50,6 +50,7 @@ export default function GeneralSettings(props) {
     'general_setting.custom_currency_symbol': '¤',
     'general_setting.custom_currency_exchange_rate': '',
     'general_setting.mask_error_message': false,
+    'general_setting.hidden_ratio_threshold': 150000,
     QuotaPerUnit: '',
     RetryTimes: '',
     USDExchangeRate: '',
@@ -296,6 +297,16 @@ export default function GeneralSettings(props) {
                   checkedText='｜'
                   uncheckedText='〇'
                   onChange={handleFieldChange('general_setting.mask_error_message')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
+                  field={'general_setting.hidden_ratio_threshold'}
+                  label={t('隐藏倍率阈值')}
+                  extraText={t('缓存tokens超过此值时跳过隐藏倍率，默认150000')}
+                  min={0}
+                  max={500000}
+                  onChange={handleFieldChange('general_setting.hidden_ratio_threshold')}
                 />
               </Col>
             </Row>
