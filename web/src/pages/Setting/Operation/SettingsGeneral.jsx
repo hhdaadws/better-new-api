@@ -128,7 +128,9 @@ export default function GeneralSettings(props) {
   };
 
   useEffect(() => {
-    const currentInputs = {};
+    // 首先复制初始 inputs 的所有 key，确保新字段也有默认值
+    const currentInputs = { ...inputs };
+    // 然后用后端返回的值覆盖
     for (let key in props.options) {
       if (Object.keys(inputs).includes(key)) {
         currentInputs[key] = props.options[key];
