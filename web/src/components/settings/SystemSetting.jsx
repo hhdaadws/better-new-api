@@ -108,6 +108,10 @@ const SystemSetting = () => {
     'fetch_setting.ip_list': [],
     'fetch_setting.allowed_ports': [],
     'fetch_setting.apply_ip_filter_for_domain': false,
+    // 风控配置
+    RiskControlEnabled: false,
+    RiskControlTimeWindowMin: 10,
+    RiskControlIPThreshold: 5,
   });
 
   const [originInputs, setOriginInputs] = useState({});
@@ -397,6 +401,15 @@ const SystemSetting = () => {
     if (options.length > 0) {
       await updateOptions(options);
     }
+  };
+
+  const submitRiskControl = async () => {
+    const options = [
+      { key: 'RiskControlEnabled', value: inputs.RiskControlEnabled },
+      { key: 'RiskControlTimeWindowMin', value: String(inputs.RiskControlTimeWindowMin) },
+      { key: 'RiskControlIPThreshold', value: String(inputs.RiskControlIPThreshold) },
+    ];
+    await updateOptions(options);
   };
 
   const handleAddEmail = () => {
@@ -973,6 +986,58 @@ const SystemSetting = () => {
 
                   <Button onClick={submitSSRF} style={{ marginTop: 16 }}>
                     {t('更新SSRF防护设置')}
+                  </Button>
+                </Form.Section>
+              </Card>
+
+              <Card>
+                <Form.Section text={t('账号风控设置')}>
+                  <Text>
+                    {t('检测异常多IP访问行为，自动封禁可疑账号。管理员和豁免用户不受影响。')}
+                  </Text>
+                  <Row
+                    gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}
+                    style={{ marginTop: 16 }}
+                  >
+                    <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                      <Form.Checkbox
+                        field='RiskControlEnabled'
+                        noLabel
+                        onChange={(e) =>
+                          handleCheckboxChange('RiskControlEnabled', e)
+                        }
+                      >
+                        {t('启用账号风控')}
+                      </Form.Checkbox>
+                    </Col>
+                    <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                      <Form.InputNumber
+                        field='RiskControlTimeWindowMin'
+                        label={t('检测时间窗口（分钟）')}
+                        min={1}
+                        max={1440}
+                        placeholder='10'
+                        extraText={t('统计不同IP数量的时间范围')}
+                      />
+                    </Col>
+                    <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+                      <Form.InputNumber
+                        field='RiskControlIPThreshold'
+                        label={t('IP数量阈值')}
+                        min={2}
+                        max={100}
+                        placeholder='5'
+                        extraText={t('超过此数量将触发封禁')}
+                      />
+                    </Col>
+                  </Row>
+                  <Banner
+                    type='info'
+                    description={t('当用户在指定时间窗口内使用超过阈值数量的不同IP地址时，将被自动封禁为"风控封禁"状态。管理员可以在用户管理中手动解封或设置豁免。')}
+                    style={{ marginTop: 16 }}
+                  />
+                  <Button onClick={submitRiskControl} style={{ marginTop: 16 }}>
+                    {t('保存风控设置')}
                   </Button>
                 </Form.Section>
               </Card>

@@ -145,6 +145,10 @@ func InitOptionMap() {
 	common.OptionMap["StreamCacheQueueLength"] = strconv.Itoa(setting.StreamCacheQueueLength)
 	common.OptionMap["AutomaticDisableKeywords"] = operation_setting.AutomaticDisableKeywordsToString()
 	common.OptionMap["ExposeRatioEnabled"] = strconv.FormatBool(ratio_setting.IsExposeRatioEnabled())
+	// 风控配置
+	common.OptionMap["RiskControlEnabled"] = strconv.FormatBool(common.RiskControlEnabled)
+	common.OptionMap["RiskControlTimeWindowMin"] = strconv.Itoa(common.RiskControlTimeWindowMin)
+	common.OptionMap["RiskControlIPThreshold"] = strconv.Itoa(common.RiskControlIPThreshold)
 
 	// 自动添加所有注册的模型配置
 	modelConfigs := config.GlobalConfig.ExportAllConfigs()
@@ -295,6 +299,8 @@ func updateOptionMap(key string, value string) (err error) {
 			setting.DefaultUseAutoGroup = boolValue
 		case "ExposeRatioEnabled":
 			ratio_setting.SetExposeRatioEnabled(boolValue)
+		case "RiskControlEnabled":
+			common.RiskControlEnabled = boolValue
 		}
 	}
 	switch key {
@@ -451,6 +457,10 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.StreamCacheQueueLength, _ = strconv.Atoi(value)
 	case "PayMethods":
 		err = operation_setting.UpdatePayMethodsByJsonString(value)
+	case "RiskControlTimeWindowMin":
+		common.RiskControlTimeWindowMin, _ = strconv.Atoi(value)
+	case "RiskControlIPThreshold":
+		common.RiskControlIPThreshold, _ = strconv.Atoi(value)
 	}
 	return err
 }

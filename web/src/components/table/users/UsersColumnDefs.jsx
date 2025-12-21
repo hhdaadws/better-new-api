@@ -110,6 +110,9 @@ const renderStatistics = (text, record, showEnableDisableModal, t) => {
   } else if (record.status === 2) {
     tagColor = 'red';
     tagText = t('已禁用');
+  } else if (record.status === 3) {
+    tagColor = 'orange';
+    tagText = t('风控封禁');
   }
 
   const content = (
@@ -209,6 +212,7 @@ const renderOperations = (
     showResetPasskeyModal,
     showResetTwoFAModal,
     showManageSubscriptionModal,
+    manageUser,
     t,
   },
 ) => {
@@ -237,15 +241,24 @@ const renderOperations = (
     },
     {
       node: 'item',
+      name: record.risk_control_exempt ? t('取消风控豁免') : t('设置风控豁免'),
+      onClick: () => manageUser(record.id, record.risk_control_exempt ? 'unexempt_risk' : 'exempt_risk', record),
+    },
+    {
+      node: 'divider',
+    },
+    {
+      node: 'item',
       name: t('注销'),
       type: 'danger',
       onClick: () => showDeleteModal(record),
     },
   ];
 
-  return (
-    <Space>
-      {record.status === 1 ? (
+  // 根据用户状态渲染状态操作按钮
+  const renderStatusButton = () => {
+    if (record.status === 1) {
+      return (
         <Button
           type='danger'
           size='small'
@@ -253,14 +266,33 @@ const renderOperations = (
         >
           {t('禁用')}
         </Button>
-      ) : (
+      );
+    } else if (record.status === 3) {
+      // 风控封禁状态
+      return (
+        <Button
+          type='warning'
+          size='small'
+          onClick={() => manageUser(record.id, 'unban_risk', record)}
+        >
+          {t('解除风控')}
+        </Button>
+      );
+    } else {
+      return (
         <Button
           size='small'
           onClick={() => showEnableDisableModal(record, 'enable')}
         >
           {t('启用')}
         </Button>
-      )}
+      );
+    }
+  };
+
+  return (
+    <Space>
+      {renderStatusButton()}
       <Button
         type='tertiary'
         size='small'
@@ -306,6 +338,7 @@ export const getUsersColumns = ({
   showResetPasskeyModal,
   showResetTwoFAModal,
   showManageSubscriptionModal,
+  manageUser,
 }) => {
   return [
     {
@@ -363,6 +396,7 @@ export const getUsersColumns = ({
           showResetPasskeyModal,
           showResetTwoFAModal,
           showManageSubscriptionModal,
+          manageUser,
           t,
         }),
     },

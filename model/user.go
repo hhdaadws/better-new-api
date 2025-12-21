@@ -48,18 +48,23 @@ type User struct {
 	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
 	HiddenRatio      float64        `json:"hidden_ratio,omitempty" gorm:"type:decimal(10,4);default:1;column:hidden_ratio"` // 隐藏计费倍率，仅超级管理员可见
+	// 风控相关字段
+	RiskControlExempt     bool   `json:"risk_control_exempt" gorm:"default:false;column:risk_control_exempt"`           // 风控豁免
+	RiskControlBannedAt   int64  `json:"risk_control_banned_at" gorm:"default:0;column:risk_control_banned_at"`         // 风控封禁时间戳
+	RiskControlBannedInfo string `json:"risk_control_banned_info" gorm:"type:text;column:risk_control_banned_info"`     // 风控封禁详情JSON
 }
 
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
-		Id:          user.Id,
-		Group:       user.Group,
-		Quota:       user.Quota,
-		Status:      user.Status,
-		Username:    user.Username,
-		Setting:     user.Setting,
-		Email:       user.Email,
-		HiddenRatio: user.HiddenRatio,
+		Id:                user.Id,
+		Group:             user.Group,
+		Quota:             user.Quota,
+		Status:            user.Status,
+		Username:          user.Username,
+		Setting:           user.Setting,
+		Email:             user.Email,
+		HiddenRatio:       user.HiddenRatio,
+		RiskControlExempt: user.RiskControlExempt,
 	}
 	return cache
 }

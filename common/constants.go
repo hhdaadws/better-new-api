@@ -173,9 +173,17 @@ var (
 
 var RateLimitKeyExpirationDuration = 20 * time.Minute
 
+// Risk Control Settings
+var (
+	RiskControlEnabled       = false // 风控开关
+	RiskControlTimeWindowMin = 10    // 时间窗口（分钟）
+	RiskControlIPThreshold   = 5     // IP阈值
+)
+
 const (
-	UserStatusEnabled  = 1 // don't use 0, 0 is the default value!
-	UserStatusDisabled = 2 // also don't use 0
+	UserStatusEnabled    = 1 // don't use 0, 0 is the default value!
+	UserStatusDisabled   = 2 // also don't use 0
+	UserStatusRiskBanned = 3 // risk control banned
 )
 
 const (

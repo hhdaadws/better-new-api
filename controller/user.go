@@ -982,6 +982,37 @@ func ManageUser(c *gin.Context) {
 			return
 		}
 		user.Role = common.RoleCommonUser
+	case "unban_risk":
+		// 解除风控封禁
+		if user.Status != common.UserStatusRiskBanned {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "该用户未被风控封禁",
+			})
+			return
+		}
+		adminId := c.GetInt("id")
+		if err := model.UnbanRiskControlUser(user.Id, adminId); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		user.Status = common.UserStatusEnabled
+	case "exempt_risk":
+		// 开启风控豁免
+		adminId := c.GetInt("id")
+		if err := model.SetRiskControlExempt(user.Id, true, adminId); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		user.RiskControlExempt = true
+	case "unexempt_risk":
+		// 关闭风控豁免
+		adminId := c.GetInt("id")
+		if err := model.SetRiskControlExempt(user.Id, false, adminId); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		user.RiskControlExempt = false
 	}
 
 	if err := user.Update(false); err != nil {

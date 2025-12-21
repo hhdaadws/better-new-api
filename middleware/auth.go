@@ -98,10 +98,14 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if status.(int) == common.UserStatusDisabled {
+	if status.(int) != common.UserStatusEnabled {
+		msg := "用户已被封禁"
+		if status.(int) == common.UserStatusRiskBanned {
+			msg = "您的账户因异常行为已被风控系统封禁，请联系管理员"
+		}
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "用户已被封禁",
+			"message": msg,
 		})
 		c.Abort()
 		return
@@ -254,9 +258,12 @@ func TokenAuth() func(c *gin.Context) {
 			abortWithOpenAiMessage(c, http.StatusInternalServerError, err.Error())
 			return
 		}
-		userEnabled := userCache.Status == common.UserStatusEnabled
-		if !userEnabled {
-			abortWithOpenAiMessage(c, http.StatusForbidden, "用户已被封禁")
+		if userCache.Status != common.UserStatusEnabled {
+			msg := "用户已被封禁"
+			if userCache.Status == common.UserStatusRiskBanned {
+				msg = "您的账户因异常行为已被风控系统封禁，请联系管理员"
+			}
+			abortWithOpenAiMessage(c, http.StatusForbidden, msg)
 			return
 		}
 

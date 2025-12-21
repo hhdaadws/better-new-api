@@ -191,6 +191,17 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			}
 		}
 	}
+
+	// 风控检测：异步检查用户IP行为
+	if common.RiskControlEnabled {
+		clientIP := c.ClientIP()
+		gopool.Go(func() {
+			_, err := CheckAndBanUser(userId, clientIP)
+			if err != nil {
+				common.SysLog("风控检测失败: " + err.Error())
+			}
+		})
+	}
 }
 
 type LogFilterParams struct {

@@ -454,3 +454,69 @@ func RedisBatchUpdateHasData(updateType int) (bool, error) {
 	}
 	return length > 0, nil
 }
+
+// ==================== Risk Control Redis Functions ====================
+// These functions are used to track user IPs for risk control
+
+const (
+	RiskControlIPSetPrefix = "risk_control:ip_set:"
+)
+
+// RiskControlAddIP 添加用户IP到风控检测集合
+func RiskControlAddIP(userId int, ip string, timeWindowMin int) error {
+	if !RedisEnabled || ip == "" {
+		return nil
+	}
+
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", RiskControlIPSetPrefix, userId)
+	expiration := time.Duration(timeWindowMin) * time.Minute
+
+	// 使用 SADD 添加 IP
+	err := RDB.SAdd(ctx, key, ip).Err()
+	if err != nil {
+		return err
+	}
+
+	// 设置过期时间
+	err = RDB.Expire(ctx, key, expiration).Err()
+	return err
+}
+
+// RiskControlGetIPCount 获取用户IP集合的数量
+func RiskControlGetIPCount(userId int) (int64, error) {
+	if !RedisEnabled {
+		return 0, fmt.Errorf("redis is not enabled")
+	}
+
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", RiskControlIPSetPrefix, userId)
+
+	count, err := RDB.SCard(ctx, key).Result()
+	return count, err
+}
+
+// RiskControlGetIPs 获取用户所有IP
+func RiskControlGetIPs(userId int) ([]string, error) {
+	if !RedisEnabled {
+		return nil, fmt.Errorf("redis is not enabled")
+	}
+
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", RiskControlIPSetPrefix, userId)
+
+	ips, err := RDB.SMembers(ctx, key).Result()
+	return ips, err
+}
+
+// RiskControlClearIPs 清除用户IP集合
+func RiskControlClearIPs(userId int) error {
+	if !RedisEnabled {
+		return nil
+	}
+
+	ctx := context.Background()
+	key := fmt.Sprintf("%s%d", RiskControlIPSetPrefix, userId)
+
+	return RDB.Del(ctx, key).Err()
+}
