@@ -29,6 +29,46 @@ type TokenDetails struct {
 	AudioTokens int
 }
 
+// ShouldApplyHiddenRatio 判断是否应该应用隐藏倍率
+// 只对 Sonnet 和 Opus 模型生效，同时检查缓存创建和缓存读取的 tokens
+func ShouldApplyHiddenRatio(modelName string, cacheCreationTokens int, cacheReadTokens int, hiddenRatio float64) bool {
+	// 如果没有隐藏倍率或倍率为 1，不需要应用
+	if hiddenRatio <= 0 || hiddenRatio == 1.0 {
+		return false
+	}
+
+	// 只对 Sonnet 和 Opus 模型生效
+	modelLower := strings.ToLower(modelName)
+	if !strings.Contains(modelLower, "sonnet") && !strings.Contains(modelLower, "opus") {
+		return false
+	}
+
+	// 最大上下文 200k，安全阈值 75% = 150k
+	const maxContextThreshold = 200000 * 0.75 // 150k
+
+	// 检查 cache_creation_tokens
+	// 条件1：cache_creation_tokens 本身已超过阈值
+	if float64(cacheCreationTokens) > maxContextThreshold {
+		return false
+	}
+	// 条件2：应用倍率后会超过阈值
+	if float64(cacheCreationTokens)*hiddenRatio > maxContextThreshold {
+		return false
+	}
+
+	// 检查 cache_read_tokens（缓存读取）
+	// 条件3：cache_read_tokens 本身已超过阈值
+	if float64(cacheReadTokens) > maxContextThreshold {
+		return false
+	}
+	// 条件4：应用倍率后会超过阈值
+	if float64(cacheReadTokens)*hiddenRatio > maxContextThreshold {
+		return false
+	}
+
+	return true
+}
+
 type QuotaInfo struct {
 	InputDetails  TokenDetails
 	OutputDetails TokenDetails
@@ -164,6 +204,8 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 	audioInputTokens := usage.InputTokenDetails.AudioTokens
 	audioOutTokens := usage.OutputTokenDetails.AudioTokens
 
+	// 隐藏倍率仅对 Sonnet/Opus 模型生效，此处不适用
+
 	tokenName := ctx.GetString("token_name")
 	completionRatio := decimal.NewFromFloat(ratio_setting.GetCompletionRatio(modelName))
 	audioRatio := decimal.NewFromFloat(ratio_setting.GetAudioRatio(relayInfo.OriginModelName))
@@ -256,6 +298,17 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 	cacheCreationTokens := usage.PromptTokensDetails.CachedCreationTokens
 	cacheCreationTokens5m := usage.ClaudeCacheCreation5mTokens
 	cacheCreationTokens1h := usage.ClaudeCacheCreation1hTokens
+
+	// 应用隐藏倍率到所有 token 数量（仅对 Sonnet/Opus 模型生效，且有兜底机制）
+	hiddenRatio := relayInfo.HiddenRatio
+	if ShouldApplyHiddenRatio(modelName, cacheCreationTokens, cacheTokens, hiddenRatio) {
+		promptTokens = int(math.Round(float64(promptTokens) * hiddenRatio))
+		completionTokens = int(math.Round(float64(completionTokens) * hiddenRatio))
+		cacheTokens = int(math.Round(float64(cacheTokens) * hiddenRatio))
+		cacheCreationTokens = int(math.Round(float64(cacheCreationTokens) * hiddenRatio))
+		cacheCreationTokens5m = int(math.Round(float64(cacheCreationTokens5m) * hiddenRatio))
+		cacheCreationTokens1h = int(math.Round(float64(cacheCreationTokens1h) * hiddenRatio))
+	}
 
 	if relayInfo.ChannelType == constant.ChannelTypeOpenRouter {
 		promptTokens -= cacheTokens
@@ -453,6 +506,8 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 
 	audioInputTokens := usage.PromptTokensDetails.AudioTokens
 	audioOutTokens := usage.CompletionTokenDetails.AudioTokens
+
+	// 隐藏倍率仅对 Sonnet/Opus 模型生效，此处不适用
 
 	tokenName := ctx.GetString("token_name")
 	completionRatio := decimal.NewFromFloat(ratio_setting.GetCompletionRatio(relayInfo.OriginModelName))

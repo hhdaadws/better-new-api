@@ -47,17 +47,19 @@ type User struct {
 	Setting          string         `json:"setting" gorm:"type:text;column:setting"`
 	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
+	HiddenRatio      float64        `json:"hidden_ratio,omitempty" gorm:"type:decimal(10,4);default:1;column:hidden_ratio"` // 隐藏计费倍率，仅超级管理员可见
 }
 
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
-		Id:       user.Id,
-		Group:    user.Group,
-		Quota:    user.Quota,
-		Status:   user.Status,
-		Username: user.Username,
-		Setting:  user.Setting,
-		Email:    user.Email,
+		Id:          user.Id,
+		Group:       user.Group,
+		Quota:       user.Quota,
+		Status:      user.Status,
+		Username:    user.Username,
+		Setting:     user.Setting,
+		Email:       user.Email,
+		HiddenRatio: user.HiddenRatio,
 	}
 	return cache
 }
@@ -463,6 +465,7 @@ func (user *User) Edit(updatePassword bool) error {
 		"group":        newUser.Group,
 		"quota":        newUser.Quota,
 		"remark":       newUser.Remark,
+		"hidden_ratio": newUser.HiddenRatio,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

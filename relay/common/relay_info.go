@@ -105,6 +105,7 @@ type RelayInfo struct {
 	UserSetting            dto.UserSetting
 	UserEmail              string
 	UserQuota              int
+	HiddenRatio            float64 // 隐藏计费倍率
 	RelayFormat            types.RelayFormat
 	SendResponseCount      int
 	FinalPreConsumedQuota    int  // 最终预消耗的配额
@@ -426,6 +427,13 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 	if ok {
 		info.UserSetting = userSetting
 	}
+
+	// 读取隐藏倍率
+	hiddenRatio := common.GetContextKeyFloat64(c, constant.ContextKeyUserHiddenRatio)
+	if hiddenRatio <= 0 {
+		hiddenRatio = 1.0
+	}
+	info.HiddenRatio = hiddenRatio
 
 	return info
 }

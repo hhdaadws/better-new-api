@@ -66,6 +66,10 @@ const EditUserModal = (props) => {
 
   const isEdit = Boolean(userId);
 
+  // 获取当前用户角色，判断是否是超级管理员
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isRootUser = currentUser.role === 100;
+
   const getInitValues = () => ({
     username: '',
     display_name: '',
@@ -79,6 +83,7 @@ const EditUserModal = (props) => {
     quota: 0,
     group: 'default',
     remark: '',
+    hidden_ratio: 1,
   });
 
   const fetchGroups = async () => {
@@ -306,6 +311,23 @@ const EditUserModal = (props) => {
                           />
                         </Form.Slot>
                       </Col>
+
+                      {/* 隐藏倍率 - 仅超级管理员可见 */}
+                      {isRootUser && (
+                        <Col span={24}>
+                          <Form.InputNumber
+                            field='hidden_ratio'
+                            label={t('隐藏倍率')}
+                            placeholder={t('用户计费的隐藏倍率')}
+                            step={0.01}
+                            min={0.01}
+                            max={10}
+                            precision={4}
+                            extraText={t('该倍率对用户不可见，会通过调整token数量实现计费')}
+                            style={{ width: '100%' }}
+                          />
+                        </Col>
+                      )}
                     </Row>
                   </Card>
                 )}

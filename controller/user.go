@@ -324,6 +324,10 @@ func GetUser(c *gin.Context) {
 		})
 		return
 	}
+	// 对非超级管理员隐藏隐藏倍率字段
+	if myRole != common.RoleRootUser {
+		user.HiddenRatio = 0
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
@@ -641,6 +645,10 @@ func UpdateUser(c *gin.Context) {
 	}
 	if updatedUser.Password == "$I_LOVE_U" {
 		updatedUser.Password = "" // rollback to what it should be
+	}
+	// 只有超级管理员可以修改隐藏倍率
+	if myRole != common.RoleRootUser {
+		updatedUser.HiddenRatio = originUser.HiddenRatio
 	}
 	updatePassword := updatedUser.Password != ""
 	if err := updatedUser.Edit(updatePassword); err != nil {

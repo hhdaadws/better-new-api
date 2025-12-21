@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -207,6 +208,17 @@ func postConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usage 
 	cachedCreationTokens := usage.PromptTokensDetails.CachedCreationTokens
 
 	modelName := relayInfo.OriginModelName
+
+	// 应用隐藏倍率到所有 token 数量（仅对 Sonnet/Opus 模型生效，且有兜底机制）
+	hiddenRatio := relayInfo.HiddenRatio
+	if service.ShouldApplyHiddenRatio(modelName, cachedCreationTokens, cacheTokens, hiddenRatio) {
+		promptTokens = int(math.Round(float64(promptTokens) * hiddenRatio))
+		completionTokens = int(math.Round(float64(completionTokens) * hiddenRatio))
+		cacheTokens = int(math.Round(float64(cacheTokens) * hiddenRatio))
+		imageTokens = int(math.Round(float64(imageTokens) * hiddenRatio))
+		audioTokens = int(math.Round(float64(audioTokens) * hiddenRatio))
+		cachedCreationTokens = int(math.Round(float64(cachedCreationTokens) * hiddenRatio))
+	}
 
 	tokenName := ctx.GetString("token_name")
 	completionRatio := relayInfo.PriceData.CompletionRatio
