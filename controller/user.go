@@ -324,9 +324,10 @@ func GetUser(c *gin.Context) {
 		})
 		return
 	}
-	// 对非超级管理员隐藏隐藏倍率字段
+	// 对非超级管理员隐藏隐藏倍率字段和优惠倍率字段
 	if myRole != common.RoleRootUser {
 		user.HiddenRatio = 0
+		user.DiscountRatio = 0
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -646,9 +647,15 @@ func UpdateUser(c *gin.Context) {
 	if updatedUser.Password == "$I_LOVE_U" {
 		updatedUser.Password = "" // rollback to what it should be
 	}
-	// 只有超级管理员可以修改隐藏倍率
+	// 只有超级管理员可以修改隐藏倍率和优惠倍率
 	if myRole != common.RoleRootUser {
 		updatedUser.HiddenRatio = originUser.HiddenRatio
+		updatedUser.DiscountRatio = originUser.DiscountRatio
+	} else {
+		// 超级管理员修改时验证优惠倍率范围
+		if updatedUser.DiscountRatio <= 0 || updatedUser.DiscountRatio > 1 {
+			updatedUser.DiscountRatio = 1 // 无效值重置为默认值
+		}
 	}
 	updatePassword := updatedUser.Password != ""
 	if err := updatedUser.Edit(updatePassword); err != nil {
@@ -1343,5 +1350,135 @@ func UpdateUserSetting(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "设置已更新",
+	})
+}
+
+// ========== 优惠倍率管理 API（超级管理员专属） ==========
+
+// DiscountRatioUser 用于优惠倍率列表的用户信息
+type DiscountRatioUser struct {
+	Id            int     `json:"id"`
+	Username      string  `json:"username"`
+	DisplayName   string  `json:"display_name"`
+	DiscountRatio float64 `json:"discount_ratio"`
+	Group         string  `json:"group"`
+}
+
+// GetAllUsersDiscountRatio 获取所有用户的优惠倍率列表（仅超级管理员）
+func GetAllUsersDiscountRatio(c *gin.Context) {
+	pageInfo := common.GetPageQuery(c)
+	keyword := c.Query("keyword")
+	hasDiscount := c.Query("has_discount") // "true" / "false" / ""
+
+	var users []*model.User
+	var total int64
+	var err error
+
+	query := model.DB.Model(&model.User{}).Select("id, username, display_name, discount_ratio, `group`")
+
+	// 关键字搜索
+	if keyword != "" {
+		query = query.Where("username LIKE ? OR display_name LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+
+	// 筛选有优惠/无优惠
+	if hasDiscount == "true" {
+		query = query.Where("discount_ratio < 1")
+	} else if hasDiscount == "false" {
+		query = query.Where("discount_ratio >= 1 OR discount_ratio IS NULL")
+	}
+
+	// 获取总数
+	err = query.Count(&total).Error
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// 获取分页数据
+	err = query.Order("id desc").Limit(pageInfo.GetPageSize()).Offset(pageInfo.GetStartIdx()).Find(&users).Error
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// 转换为返回结构
+	result := make([]DiscountRatioUser, len(users))
+	for i, user := range users {
+		result[i] = DiscountRatioUser{
+			Id:            user.Id,
+			Username:      user.Username,
+			DisplayName:   user.DisplayName,
+			DiscountRatio: user.DiscountRatio,
+			Group:         user.Group,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    result,
+		"total":   total,
+	})
+}
+
+// BatchDiscountRatioRequest 批量设置优惠倍率请求
+type BatchDiscountRatioRequest struct {
+	UserIds       []int   `json:"user_ids" binding:"required"`
+	DiscountRatio float64 `json:"discount_ratio" binding:"required"`
+}
+
+// BatchSetDiscountRatio 批量设置用户优惠倍率（仅超级管理员）
+func BatchSetDiscountRatio(c *gin.Context) {
+	var req BatchDiscountRatioRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 验证优惠倍率范围
+	if req.DiscountRatio <= 0 || req.DiscountRatio > 1 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "优惠倍率必须大于0且小于等于1",
+		})
+		return
+	}
+
+	if len(req.UserIds) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": "请选择要设置的用户",
+		})
+		return
+	}
+
+	// 批量更新
+	err := model.DB.Model(&model.User{}).Where("id IN ?", req.UserIds).
+		Update("discount_ratio", req.DiscountRatio).Error
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// 清除这些用户的缓存
+	for _, userId := range req.UserIds {
+		user, err := model.GetUserById(userId, false)
+		if err == nil {
+			user.DiscountRatio = req.DiscountRatio
+			// 触发缓存更新
+			_ = user.Update(false)
+		}
+	}
+
+	adminUsername := c.GetString("username")
+	common.SysLog(fmt.Sprintf("管理员 %s 批量设置了 %d 个用户的优惠倍率为 %.2f", adminUsername, len(req.UserIds), req.DiscountRatio))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("已成功设置 %d 个用户的优惠倍率", len(req.UserIds)),
 	})
 }

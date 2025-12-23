@@ -42,6 +42,7 @@ const routerMap = {
   midjourney: '/console/midjourney',
   setting: '/console/setting',
   checkin: '/console/checkin',
+  discount: '/console/discount',
   subscriptionPackages: '/console/subscription',
   subscriptionPageSetting: '/console/subscription-page-setting',
   about: '/about',
@@ -196,6 +197,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         itemKey: 'checkin',
         to: '/checkin',
         className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('优惠倍率'),
+        itemKey: 'discount',
+        to: '/discount',
+        className: isRoot() ? '' : 'tableHiddle',
       },
       {
         text: t('订阅管理'),

@@ -23,6 +23,7 @@ type UserBase struct {
 	Username          string  `json:"username"`
 	Setting           string  `json:"setting"`
 	HiddenRatio       float64 `json:"hidden_ratio"`
+	DiscountRatio     float64 `json:"discount_ratio"`
 	RiskControlExempt bool    `json:"risk_control_exempt"`
 }
 
@@ -34,6 +35,7 @@ func (user *UserBase) WriteContext(c *gin.Context) {
 	common.SetContextKey(c, constant.ContextKeyUserName, user.Username)
 	common.SetContextKey(c, constant.ContextKeyUserSetting, user.GetSetting())
 	common.SetContextKey(c, constant.ContextKeyUserHiddenRatio, user.HiddenRatio)
+	common.SetContextKey(c, constant.ContextKeyUserDiscountRatio, user.DiscountRatio)
 }
 
 func (user *UserBase) GetSetting() dto.UserSetting {
@@ -103,14 +105,15 @@ func GetUserCache(userId int) (userCache *UserBase, err error) {
 
 	// Create cache object from user data
 	userCache = &UserBase{
-		Id:          user.Id,
-		Group:       user.Group,
-		Quota:       user.Quota,
-		Status:      user.Status,
-		Username:    user.Username,
-		Setting:     user.Setting,
-		Email:       user.Email,
-		HiddenRatio: user.HiddenRatio,
+		Id:            user.Id,
+		Group:         user.Group,
+		Quota:         user.Quota,
+		Status:        user.Status,
+		Username:      user.Username,
+		Setting:       user.Setting,
+		Email:         user.Email,
+		HiddenRatio:   user.HiddenRatio,
+		DiscountRatio: user.DiscountRatio,
 	}
 
 	return userCache, nil

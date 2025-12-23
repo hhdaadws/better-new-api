@@ -37,15 +37,16 @@ const (
 	ContextKeyChannelKey               ContextKey = "channel_key"
 
 	/* user related keys */
-	ContextKeyUserId          ContextKey = "id"
-	ContextKeyUserSetting     ContextKey = "user_setting"
-	ContextKeyUserQuota       ContextKey = "user_quota"
-	ContextKeyUserStatus      ContextKey = "user_status"
-	ContextKeyUserEmail       ContextKey = "user_email"
-	ContextKeyUserGroup       ContextKey = "user_group"
-	ContextKeyUsingGroup      ContextKey = "group"
-	ContextKeyUserName        ContextKey = "username"
-	ContextKeyUserHiddenRatio ContextKey = "user_hidden_ratio"
+	ContextKeyUserId            ContextKey = "id"
+	ContextKeyUserSetting       ContextKey = "user_setting"
+	ContextKeyUserQuota         ContextKey = "user_quota"
+	ContextKeyUserStatus        ContextKey = "user_status"
+	ContextKeyUserEmail         ContextKey = "user_email"
+	ContextKeyUserGroup         ContextKey = "user_group"
+	ContextKeyUsingGroup        ContextKey = "group"
+	ContextKeyUserName          ContextKey = "username"
+	ContextKeyUserHiddenRatio   ContextKey = "user_hidden_ratio"
+	ContextKeyUserDiscountRatio ContextKey = "user_discount_ratio"
 
 	ContextKeyLocalCountTokens ContextKey = "local_count_tokens"
 

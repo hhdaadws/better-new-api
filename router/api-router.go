@@ -139,6 +139,14 @@ func SetApiRouter(router *gin.Engine) {
 			// Get single option by key (must be last to avoid route conflicts)
 			optionRoute.GET("/:key", controller.GetOption)
 		}
+
+		// 优惠倍率管理路由（超级管理员专属）
+		discountRoute := apiRouter.Group("/discount")
+		discountRoute.Use(middleware.RootAuth())
+		{
+			discountRoute.GET("/users", controller.GetAllUsersDiscountRatio)
+			discountRoute.POST("/batch", controller.BatchSetDiscountRatio)
+		}
 		ratioSyncRoute := apiRouter.Group("/ratio_sync")
 		ratioSyncRoute.Use(middleware.RootAuth())
 		{

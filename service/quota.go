@@ -70,6 +70,20 @@ func ShouldApplyHiddenRatio(modelName string, cacheCreationTokens int, cacheRead
 	return true
 }
 
+// ApplyDiscountRatio 应用优惠倍率，返回优惠后的quota和优惠前的quota
+// 优惠倍率必须 > 0 且 < 1 才会生效，= 1 表示无优惠
+func ApplyDiscountRatio(quota int, discountRatio float64) (finalQuota int, quotaBeforeDiscount int) {
+	quotaBeforeDiscount = quota
+	if discountRatio <= 0 || discountRatio >= 1.0 {
+		return quota, quotaBeforeDiscount
+	}
+	finalQuota = int(math.Round(float64(quota) * discountRatio))
+	if finalQuota <= 0 && quota > 0 {
+		finalQuota = 1 // 确保至少计费1
+	}
+	return finalQuota, quotaBeforeDiscount
+}
+
 type QuotaInfo struct {
 	InputDetails  TokenDetails
 	OutputDetails TokenDetails
@@ -234,6 +248,10 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 
 	quota := calculateAudioQuota(quotaInfo)
 
+	// 应用优惠倍率（最后一步，在所有其他倍率计算完成后）
+	var quotaBeforeDiscount int
+	quota, quotaBeforeDiscount = ApplyDiscountRatio(quota, relayInfo.DiscountRatio)
+
 	totalTokens := usage.TotalTokens
 	var logContent string
 	if !usePrice {
@@ -241,6 +259,10 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 			modelRatio, completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), groupRatio)
 	} else {
 		logContent = fmt.Sprintf("模型价格 %.2f，分组倍率 %.2f", modelPrice, groupRatio)
+	}
+	// 添加优惠倍率提示
+	if relayInfo.DiscountRatio > 0 && relayInfo.DiscountRatio < 1.0 {
+		logContent += fmt.Sprintf("，优惠倍率 %.2f（原价 %s）", relayInfo.DiscountRatio, logger.FormatQuota(quotaBeforeDiscount))
 	}
 
 	// record all the consume log even if quota is 0
@@ -262,6 +284,13 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 	}
 	other := GenerateWssOtherInfo(ctx, relayInfo, usage, modelRatio, groupRatio,
 		completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
+
+	// 如果应用了优惠倍率，在日志中记录详细信息
+	if relayInfo.DiscountRatio > 0 && relayInfo.DiscountRatio < 1.0 {
+		other["discount_ratio"] = relayInfo.DiscountRatio
+		other["quota_before_discount"] = quotaBeforeDiscount
+	}
+
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     usage.InputTokens,
@@ -388,6 +417,10 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 
 	quota := int(calculateQuota)
 
+	// 应用优惠倍率（最后一步，在所有其他倍率计算完成后）
+	var quotaBeforeDiscount int
+	quota, quotaBeforeDiscount = ApplyDiscountRatio(quota, relayInfo.DiscountRatio)
+
 	totalTokens := promptTokens + completionTokens
 
 	var logContent string
@@ -399,6 +432,10 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 	if freeCacheCreation && originalCacheCreationTokens > 0 {
 		logContent += fmt.Sprintf("（渠道切换免费缓存创建：从渠道 %d 切换到渠道 %d，原缓存创建 %d tokens 未计费）",
 			freeCachePrevChannel, relayInfo.ChannelId, originalCacheCreationTokens)
+	}
+	// 添加优惠倍率提示
+	if relayInfo.DiscountRatio > 0 && relayInfo.DiscountRatio < 1.0 {
+		logContent += fmt.Sprintf("，优惠倍率 %.2f（原价 %s）", relayInfo.DiscountRatio, logger.FormatQuota(quotaBeforeDiscount))
 	}
 	// record all the consume log even if quota is 0
 	if totalTokens == 0 {
@@ -459,6 +496,12 @@ func PostClaudeConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, 
 			other["free_cache_prev_channel"] = freeCachePrevChannel
 		}
 		other["free_cache_new_channel"] = relayInfo.ChannelId
+	}
+
+	// 如果应用了优惠倍率，在日志中记录详细信息
+	if relayInfo.DiscountRatio > 0 && relayInfo.DiscountRatio < 1.0 {
+		other["discount_ratio"] = relayInfo.DiscountRatio
+		other["quota_before_discount"] = quotaBeforeDiscount
 	}
 
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
@@ -537,6 +580,10 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 
 	quota := calculateAudioQuota(quotaInfo)
 
+	// 应用优惠倍率（最后一步，在所有其他倍率计算完成后）
+	var quotaBeforeDiscount int
+	quota, quotaBeforeDiscount = ApplyDiscountRatio(quota, relayInfo.DiscountRatio)
+
 	totalTokens := usage.TotalTokens
 	var logContent string
 	if !usePrice {
@@ -544,6 +591,10 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 			modelRatio, completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), groupRatio)
 	} else {
 		logContent = fmt.Sprintf("模型价格 %.2f，分组倍率 %.2f", modelPrice, groupRatio)
+	}
+	// 添加优惠倍率提示
+	if relayInfo.DiscountRatio > 0 && relayInfo.DiscountRatio < 1.0 {
+		logContent += fmt.Sprintf("，优惠倍率 %.2f（原价 %s）", relayInfo.DiscountRatio, logger.FormatQuota(quotaBeforeDiscount))
 	}
 
 	// record all the consume log even if quota is 0
@@ -588,6 +639,13 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 	}
 	other := GenerateAudioOtherInfo(ctx, relayInfo, usage, modelRatio, groupRatio,
 		completionRatio.InexactFloat64(), audioRatio.InexactFloat64(), audioCompletionRatio.InexactFloat64(), modelPrice, relayInfo.PriceData.GroupRatioInfo.GroupSpecialRatio)
+
+	// 如果应用了优惠倍率，在日志中记录详细信息
+	if relayInfo.DiscountRatio > 0 && relayInfo.DiscountRatio < 1.0 {
+		other["discount_ratio"] = relayInfo.DiscountRatio
+		other["quota_before_discount"] = quotaBeforeDiscount
+	}
+
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     usage.PromptTokens,

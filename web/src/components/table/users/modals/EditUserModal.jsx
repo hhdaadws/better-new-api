@@ -84,6 +84,7 @@ const EditUserModal = (props) => {
     group: 'default',
     remark: '',
     hidden_ratio: 1,
+    discount_ratio: 1,
   });
 
   const fetchGroups = async () => {
@@ -324,6 +325,23 @@ const EditUserModal = (props) => {
                             max={10}
                             precision={4}
                             extraText={t('该倍率对用户不可见，会通过调整token数量实现计费')}
+                            style={{ width: '100%' }}
+                          />
+                        </Col>
+                      )}
+
+                      {/* 优惠倍率 - 仅超级管理员可见 */}
+                      {isRootUser && (
+                        <Col span={24}>
+                          <Form.InputNumber
+                            field='discount_ratio'
+                            label={t('优惠倍率')}
+                            placeholder={t('用户计费的优惠倍率')}
+                            step={0.01}
+                            min={0.01}
+                            max={1}
+                            precision={4}
+                            extraText={t('≤1，默认1表示无优惠。该倍率会在所有计费计算后应用')}
                             style={{ width: '100%' }}
                           />
                         </Col>
