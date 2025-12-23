@@ -133,6 +133,127 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 	// Non-free group: 优先使用订阅额度，不足时降级到用户余额
 	// 订阅额度是用户余额的替代品，不区分分组
 
+	// ========== 专属分组：仅使用订阅额度，不降级到用户余额 ==========
+	isExclusiveGroup := model.IsExclusiveGroup(relayInfo.UsingGroup)
+	if isExclusiveGroup {
+		// 验证专属分组是否属于当前用户
+		exclusiveUserId, ok := model.GetExclusiveGroupUserId(relayInfo.UsingGroup)
+		if !ok || exclusiveUserId != relayInfo.UserId {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("无权使用他人的专属分组"),
+				types.ErrorCodeForbidden, http.StatusForbidden,
+				types.ErrOptionWithSkipRetry())
+		}
+
+		// 获取用户的有效订阅
+		userSub, sub, err := model.GetActiveUserSubscriptionNoGroup(relayInfo.UserId)
+		if err != nil || sub == nil || userSub == nil {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("专属分组需要有效订阅"),
+				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+				types.ErrOptionWithSkipRetry())
+		}
+
+		// 验证订阅是否启用专属分组
+		if !sub.EnableExclusiveGroup {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("当前订阅套餐未启用专属分组功能"),
+				types.ErrorCodeForbidden, http.StatusForbidden,
+				types.ErrOptionWithSkipRetry())
+		}
+
+		// 获取订阅剩余额度
+		quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, sub)
+		dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
+
+		// 计算各维度剩余额度
+		dailyRemaining := sub.DailyQuotaLimit - dailyUsed
+		if sub.DailyQuotaLimit == 0 {
+			dailyRemaining = int(^uint(0) >> 1) // 无限制
+		}
+		weeklyRemaining := sub.WeeklyQuotaLimit - weeklyUsed
+		if sub.WeeklyQuotaLimit == 0 {
+			weeklyRemaining = int(^uint(0) >> 1) // 无限制
+		}
+		totalRemaining := sub.TotalQuotaLimit - totalUsed
+		if sub.TotalQuotaLimit == 0 {
+			totalRemaining = int(^uint(0) >> 1) // 无限制
+		}
+
+		// 取最小值作为可用额度
+		subscriptionQuotaAvailable := dailyRemaining
+		if weeklyRemaining < subscriptionQuotaAvailable {
+			subscriptionQuotaAvailable = weeklyRemaining
+		}
+		if totalRemaining < subscriptionQuotaAvailable {
+			subscriptionQuotaAvailable = totalRemaining
+		}
+		if subscriptionQuotaAvailable < 0 {
+			subscriptionQuotaAvailable = 0
+		}
+
+		// 专属分组仅使用订阅额度，不降级到用户余额
+		if subscriptionQuotaAvailable <= 0 {
+			return types.NewErrorWithStatusCode(
+				fmt.Errorf("专属分组订阅额度已用完（日剩余: %s，周剩余: %s，总剩余: %s）",
+					logger.FormatQuota(sub.DailyQuotaLimit-dailyUsed),
+					logger.FormatQuota(sub.WeeklyQuotaLimit-weeklyUsed),
+					logger.FormatQuota(sub.TotalQuotaLimit-totalUsed)),
+				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+		}
+
+		relayInfo.UserQuota = userQuota
+
+		// 信任机制判断
+		trustQuota := common.GetTrustQuota()
+		if subscriptionQuotaAvailable > trustQuota {
+			if !relayInfo.TokenUnlimited {
+				tokenQuota := c.GetInt("token_quota")
+				if tokenQuota > trustQuota {
+					preConsumedQuota = 0
+					logger.LogInfo(c, fmt.Sprintf("用户 %d 专属分组订阅额度 %s 且令牌 %d 额度 %d 充足, 信任且不需要预扣费",
+						relayInfo.UserId, logger.FormatQuota(subscriptionQuotaAvailable),
+						relayInfo.TokenId, tokenQuota))
+				}
+			} else {
+				preConsumedQuota = 0
+				logger.LogInfo(c, fmt.Sprintf("用户 %d 专属分组订阅额度 %s 且为无限额度令牌, 信任且不需要预扣费",
+					relayInfo.UserId, logger.FormatQuota(subscriptionQuotaAvailable)))
+			}
+		}
+
+		if preConsumedQuota > 0 {
+			// 预扣 Token 额度
+			err := PreConsumeTokenQuota(relayInfo, preConsumedQuota)
+			if err != nil {
+				return types.NewErrorWithStatusCode(err, types.ErrorCodePreConsumeTokenQuotaFailed, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+			}
+
+			// 仅从订阅额度预扣，不降级
+			usedSubscription, _ := TryPreConsumeSubscriptionQuota(relayInfo.UserId, preConsumedQuota)
+			if !usedSubscription {
+				// 返还 Token 额度
+				model.IncreaseTokenQuota(relayInfo.TokenId, relayInfo.TokenKey, preConsumedQuota)
+				return types.NewErrorWithStatusCode(
+					fmt.Errorf("专属分组订阅额度预扣失败，请检查额度是否充足"),
+					types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+					types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+			}
+
+			relayInfo.SubscriptionPreConsumed = true
+			relayInfo.ExclusiveGroupUsed = true
+			logger.LogInfo(c, fmt.Sprintf("用户 %d 从专属分组订阅额度预扣费 %s",
+				relayInfo.UserId, logger.FormatQuota(preConsumedQuota)))
+		}
+
+		relayInfo.ExclusiveGroupUsed = true
+		relayInfo.FinalPreConsumedQuota = preConsumedQuota
+		return nil
+	}
+
+	// ========== 非专属分组：优先使用订阅额度，不足时降级到用户余额 ==========
+
 	// 检查是否有可用的订阅额度（用于判断总额度是否足够）
 	subscriptionQuotaAvailable := 0 // 订阅可用额度
 	if userSub, sub, err := model.GetActiveUserSubscriptionNoGroup(relayInfo.UserId); err == nil && sub != nil {

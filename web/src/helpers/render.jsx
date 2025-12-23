@@ -813,6 +813,8 @@ export const renderGroupOption = (item) => {
     onClick,
     empty,
     emptyContent,
+    isExclusive,
+    hasChannels,
     ...rest
   } = item;
 
@@ -851,11 +853,23 @@ export const renderGroupOption = (item) => {
       onMouseEnter={handleMouseEnter}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <Typography.Text strong type={disabled ? 'tertiary' : undefined}>
-          {value}
-        </Typography.Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Typography.Text strong type={disabled ? 'tertiary' : undefined}>
+            {value}
+          </Typography.Text>
+          {isExclusive && (
+            <Tag color='violet' size='small'>
+              {i18next.t('专属')}
+            </Tag>
+          )}
+        </div>
         <Typography.Text type='secondary' size='small'>
           {label}
+          {isExclusive && !hasChannels && (
+            <span style={{ color: 'var(--semi-color-warning)', marginLeft: '4px' }}>
+              ({i18next.t('尚未配置渠道')})
+            </span>
+          )}
         </Typography.Text>
       </div>
       {item.ratio && renderRatio(item.ratio)}

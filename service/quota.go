@@ -752,23 +752,30 @@ func PostConsumeQuota(relayInfo *relaycommon.RelayInfo, quota int, preConsumedQu
 				// 需要补扣：尝试从订阅额度补扣
 				usedSubscription, _ := TryConsumeSubscriptionQuota(relayInfo, quota)
 				if !usedSubscription {
-					// 订阅额度不足，降级到用户余额
-					// 先检查用户余额是否足够
-					userQuota, queryErr := model.GetUserQuota(relayInfo.UserId, false)
-					if queryErr != nil {
-						common.SysError("PostConsumeQuota: failed to get user quota: " + queryErr.Error())
-					} else if userQuota < quota {
-						// 用户余额不足，记录日志但只扣除可用余额
-						common.SysError(fmt.Sprintf("PostConsumeQuota: 用户 %d 订阅额度用尽且余额不足，需要扣费 %s，实际余额 %s，将扣至0",
-							relayInfo.UserId, logger.FormatQuota(quota), logger.FormatQuota(userQuota)))
-						if userQuota > 0 {
-							err = model.DecreaseUserQuota(relayInfo.UserId, userQuota)
-						}
+					// 专属分组：不允许降级到用户余额
+					if relayInfo.ExclusiveGroupUsed {
+						common.SysError(fmt.Sprintf("PostConsumeQuota: 用户 %d 专属分组订阅额度不足，需要补扣 %s，不降级到用户余额",
+							relayInfo.UserId, logger.FormatQuota(quota)))
+						// 专属分组不降级，记录欠费但不扣用户余额
 					} else {
-						err = model.DecreaseUserQuota(relayInfo.UserId, quota)
-					}
-					if err != nil {
-						return err
+						// 非专属分组：订阅额度不足，降级到用户余额
+						// 先检查用户余额是否足够
+						userQuota, queryErr := model.GetUserQuota(relayInfo.UserId, false)
+						if queryErr != nil {
+							common.SysError("PostConsumeQuota: failed to get user quota: " + queryErr.Error())
+						} else if userQuota < quota {
+							// 用户余额不足，记录日志但只扣除可用余额
+							common.SysError(fmt.Sprintf("PostConsumeQuota: 用户 %d 订阅额度用尽且余额不足，需要扣费 %s，实际余额 %s，将扣至0",
+								relayInfo.UserId, logger.FormatQuota(quota), logger.FormatQuota(userQuota)))
+							if userQuota > 0 {
+								err = model.DecreaseUserQuota(relayInfo.UserId, userQuota)
+							}
+						} else {
+							err = model.DecreaseUserQuota(relayInfo.UserId, quota)
+						}
+						if err != nil {
+							return err
+						}
 					}
 				}
 			} else if quota < 0 {

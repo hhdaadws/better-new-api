@@ -3,6 +3,7 @@ package service
 import (
 	"strings"
 
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 )
@@ -36,9 +37,70 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 	return groupsCopy
 }
 
+// GetUserUsableGroupsWithExclusive 获取用户可用分组，包含专属分组
+// userGroup: 用户的分组
+// userId: 用户ID，用于检查是否有启用专属分组的有效订阅
+func GetUserUsableGroupsWithExclusive(userGroup string, userId int) map[string]string {
+	groupsCopy := GetUserUsableGroups(userGroup)
+
+	// 检查用户是否有启用专属分组的有效订阅
+	if userId > 0 {
+		exclusiveGroup, hasExclusive := GetUserExclusiveGroup(userId)
+		if hasExclusive {
+			groupsCopy[exclusiveGroup] = "专属订阅分组"
+		}
+	}
+
+	return groupsCopy
+}
+
+// GetUserExclusiveGroup 获取用户的专属分组名
+// 如果用户有启用专属分组的有效订阅，返回专属分组名和 true
+// 否则返回空字符串和 false
+func GetUserExclusiveGroup(userId int) (string, bool) {
+	userSub, sub, err := model.GetActiveUserSubscriptionNoGroup(userId)
+	if err != nil || sub == nil || userSub == nil {
+		return "", false
+	}
+	if !sub.EnableExclusiveGroup {
+		return "", false
+	}
+	return model.GetExclusiveGroupName(userId), true
+}
+
+// GetUserExclusiveGroupStatus 获取用户专属分组的状态信息
+// 返回：是否有专属分组权限、是否配置了渠道、专属分组名
+func GetUserExclusiveGroupStatus(userId int) (hasPermission bool, hasChannels bool, groupName string) {
+	exclusiveGroup, hasExclusive := GetUserExclusiveGroup(userId)
+	if !hasExclusive {
+		return false, false, ""
+	}
+
+	hasChannels, _ = model.HasExclusiveGroupChannels(userId)
+	return true, hasChannels, exclusiveGroup
+}
+
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
 	_, ok := GetUserUsableGroups(userGroup)[groupName]
 	return ok
+}
+
+// GroupInUserUsableGroupsWithExclusive 检查分组是否在用户可用分组中（包含专属分组）
+func GroupInUserUsableGroupsWithExclusive(userGroup, groupName string, userId int) bool {
+	// 先检查普通分组
+	if _, ok := GetUserUsableGroups(userGroup)[groupName]; ok {
+		return true
+	}
+	// 检查是否为用户的专属分组
+	if model.IsExclusiveGroup(groupName) {
+		exclusiveUserId, ok := model.GetExclusiveGroupUserId(groupName)
+		if ok && exclusiveUserId == userId {
+			// 确认用户有专属分组权限
+			_, hasExclusive := GetUserExclusiveGroup(userId)
+			return hasExclusive
+		}
+	}
+	return false
 }
 
 // GetUserAutoGroup 根据用户分组获取自动分组设置

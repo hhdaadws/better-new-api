@@ -30,17 +30,18 @@ const (
 
 // Subscription 订阅套餐
 type Subscription struct {
-	Id                 int    `json:"id"`
-	Name               string `json:"name" gorm:"type:varchar(64);not null"`
-	Description        string `json:"description" gorm:"type:text"`
-	DailyQuotaLimit    int    `json:"daily_quota_limit" gorm:"default:0"`
-	WeeklyQuotaLimit   int    `json:"weekly_quota_limit" gorm:"default:0"`
-	TotalQuotaLimit    int    `json:"total_quota_limit" gorm:"column:monthly_quota_limit;default:0"` // 总限额（订阅期内不重置）
-	AllowedGroups      string `json:"allowed_groups" gorm:"type:text;not null"` // JSON array
-	DurationDays       int    `json:"duration_days" gorm:"default:30"`
-	Status             int    `json:"status" gorm:"default:1"`
-	CreatedTime        int64  `json:"created_time" gorm:"bigint"`
-	UpdatedTime        int64  `json:"updated_time" gorm:"bigint"`
+	Id                   int    `json:"id"`
+	Name                 string `json:"name" gorm:"type:varchar(64);not null"`
+	Description          string `json:"description" gorm:"type:text"`
+	DailyQuotaLimit      int    `json:"daily_quota_limit" gorm:"default:0"`
+	WeeklyQuotaLimit     int    `json:"weekly_quota_limit" gorm:"default:0"`
+	TotalQuotaLimit      int    `json:"total_quota_limit" gorm:"column:monthly_quota_limit;default:0"` // 总限额（订阅期内不重置）
+	AllowedGroups        string `json:"allowed_groups" gorm:"type:text;not null"`                      // JSON array
+	DurationDays         int    `json:"duration_days" gorm:"default:30"`
+	Status               int    `json:"status" gorm:"default:1"`
+	EnableExclusiveGroup bool   `json:"enable_exclusive_group" gorm:"default:false"` // 启用用户专属分组
+	CreatedTime          int64  `json:"created_time" gorm:"bigint"`
+	UpdatedTime          int64  `json:"updated_time" gorm:"bigint"`
 }
 
 // UserSubscription 用户订阅

@@ -335,6 +335,17 @@ func SearchChannels(keyword string, group string, model string, idSort bool) ([]
 	return channels, nil
 }
 
+// GetAllChannelsForExclusive 获取所有可用于专属绑定的渠道
+// 返回简化的渠道列表（不含key），用于管理员选择
+func GetAllChannelsForExclusive() ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.Where("status = ?", common.ChannelStatusEnabled).
+		Order("priority desc, id desc").
+		Omit("key").
+		Find(&channels).Error
+	return channels, err
+}
+
 func GetChannelById(id int, selectAll bool) (*Channel, error) {
 	channel := &Channel{Id: id}
 	var err error = nil

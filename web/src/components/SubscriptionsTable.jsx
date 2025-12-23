@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Tag, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, TextArea } from '@douyinfe/semi-ui';
+import { Button, Table, Tag, Space, Modal, Form, Input, InputNumber, Select, Popconfirm, TextArea, Switch } from '@douyinfe/semi-ui';
 import { API } from '../helpers';
 import { showError, showSuccess } from '../helpers/utils';
 
@@ -82,6 +82,16 @@ const SubscriptionsTable = () => {
       render: (status) => (
         <Tag color={status === 1 ? 'green' : 'red'}>
           {status === 1 ? '启用' : '禁用'}
+        </Tag>
+      ),
+    },
+    {
+      title: '专属分组',
+      dataIndex: 'enable_exclusive_group',
+      width: 100,
+      render: (value) => (
+        <Tag color={value ? 'blue' : 'grey'}>
+          {value ? '已启用' : '未启用'}
         </Tag>
       ),
     },
@@ -386,6 +396,12 @@ const SubscriptionsTable = () => {
             <Select.Option value={1}>启用</Select.Option>
             <Select.Option value={2}>禁用</Select.Option>
           </Form.Select>
+          <Form.Switch
+            field="enable_exclusive_group"
+            label="启用专属分组"
+            initValue={false}
+            extraText="启用后，管理员可为每个用户配置专属渠道，用户使用专属分组时仅消耗订阅额度"
+          />
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
             <Space>

@@ -44,6 +44,18 @@ func GetUserGroups(c *gin.Context) {
 			"desc":  setting.GetUsableGroupDescription("auto"),
 		}
 	}
+
+	// 检查并添加专属分组
+	hasPermission, hasChannels, exclusiveGroupName := service.GetUserExclusiveGroupStatus(userId)
+	if hasPermission {
+		usableGroups[exclusiveGroupName] = map[string]interface{}{
+			"ratio":        1.0, // 专属分组使用订阅额度，倍率为1
+			"desc":         "专属订阅分组",
+			"is_exclusive": true,
+			"has_channels": hasChannels,
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

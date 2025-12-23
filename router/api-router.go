@@ -234,6 +234,11 @@ func SetApiRouter(router *gin.Engine) {
 				adminSubscriptionRoute.PUT("/:id", controller.UpdateSubscription)
 				adminSubscriptionRoute.DELETE("/:id", controller.DeleteSubscription)
 				adminSubscriptionRoute.POST("/redemption", controller.AddSubscriptionRedemption)
+				// 用户专属渠道管理
+				adminSubscriptionRoute.GET("/exclusive/user/:userId/channels", controller.GetUserExclusiveChannels)
+				adminSubscriptionRoute.POST("/exclusive/user/:userId/channel", controller.AddUserExclusiveChannel)
+				adminSubscriptionRoute.DELETE("/exclusive/user/:userId/channel/:channelId", controller.RemoveUserExclusiveChannel)
+				adminSubscriptionRoute.GET("/exclusive/available_channels", controller.GetAvailableChannelsForExclusive)
 			}
 
 			// User routes
@@ -243,6 +248,7 @@ func SetApiRouter(router *gin.Engine) {
 				userSubscriptionRoute.GET("/", controller.GetMySubscriptions)
 				userSubscriptionRoute.GET("/:id/quota", controller.GetMySubscriptionQuota)
 				userSubscriptionRoute.GET("/logs", controller.GetMySubscriptionLogs)
+				userSubscriptionRoute.GET("/exclusive_group_status", controller.GetUserExclusiveGroupStatus)
 			}
 		}
 		logRoute := apiRouter.Group("/log")

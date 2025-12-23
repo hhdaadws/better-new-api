@@ -133,6 +133,10 @@ const EditTokenModal = (props) => {
         label: info.desc,
         value: group,
         ratio: info.ratio,
+        isExclusive: info.is_exclusive || false,
+        hasChannels: info.has_channels !== undefined ? info.has_channels : true,
+        // 专属分组没有配置渠道时禁用
+        disabled: info.is_exclusive && !info.has_channels,
       }));
       if (statusState?.status?.default_use_auto_group) {
         if (localGroupOptions.some((group) => group.value === 'auto')) {

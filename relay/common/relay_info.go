@@ -112,6 +112,7 @@ type RelayInfo struct {
 	FinalPreConsumedQuota    int  // 最终预消耗的配额
 	CheckinQuotaConsumed     int  // 签到额度消费量
 	SubscriptionPreConsumed  bool // 预扣费是否来自订阅额度（用于正确返还）
+	ExclusiveGroupUsed       bool // 是否使用了专属分组（仅订阅额度，不降级）
 	IsClaudeBetaQuery        bool // /v1/messages?beta=true
 
 	PriceData types.PriceData

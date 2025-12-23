@@ -34,10 +34,12 @@ import {
   DatePicker,
   InputNumber,
   Select,
+  Banner,
 } from '@douyinfe/semi-ui';
-import { IconPlus, IconEdit, IconDelete } from '@douyinfe/semi-icons';
+import { IconPlus, IconEdit, IconDelete, IconLink } from '@douyinfe/semi-icons';
 import { API, showError, showSuccess, renderQuota, timestamp2string } from '../../../../helpers';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
+import UserExclusiveChannelManager from '../../../subscription/UserExclusiveChannelManager';
 
 const { Text } = Typography;
 
@@ -51,6 +53,8 @@ const ManageSubscriptionModal = ({ visible, onCancel, user, t, refresh }) => {
   const [editingSubscription, setEditingSubscription] = useState(null);
   const [addForm, setAddForm] = useState({ subscription_id: null, duration_days: null });
   const [editForm, setEditForm] = useState({ subscription_id: null, expire_time: null });
+  const [showExclusiveChannels, setShowExclusiveChannels] = useState(false);
+  const [hasExclusiveSubscription, setHasExclusiveSubscription] = useState(false);
 
   // Load user's subscriptions
   const loadUserSubscriptions = async () => {
@@ -61,7 +65,14 @@ const ManageSubscriptionModal = ({ visible, onCancel, user, t, refresh }) => {
       if (res.data.success) {
         // API returns paginated data: { items: [...], total: ... }
         const data = res.data.data;
-        setSubscriptions(Array.isArray(data) ? data : (data?.items || []));
+        const subs = Array.isArray(data) ? data : (data?.items || []);
+        setSubscriptions(subs);
+
+        // Check if any active subscription has exclusive group enabled
+        const hasExclusive = subs.some(s =>
+          s.status === 1 && s.subscription_info?.enable_exclusive_group
+        );
+        setHasExclusiveSubscription(hasExclusive);
       } else {
         showError(res.data.message);
       }
@@ -288,14 +299,46 @@ const ManageSubscriptionModal = ({ visible, onCancel, user, t, refresh }) => {
 
   const content = (
     <Spin spinning={loading}>
+      {/* Exclusive Group Banner */}
+      {hasExclusiveSubscription && (
+        <Banner
+          type="info"
+          description={
+            <div className="flex items-center justify-between">
+              <span>{t('该用户有启用专属分组的订阅套餐，可以配置专属渠道')}</span>
+              <Button
+                size="small"
+                theme="solid"
+                icon={<IconLink />}
+                onClick={() => setShowExclusiveChannels(true)}
+              >
+                {t('管理专属渠道')}
+              </Button>
+            </div>
+          }
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       <div className="mb-4">
-        <Button
-          icon={<IconPlus />}
-          theme="solid"
-          onClick={() => setShowAddModal(true)}
-        >
-          {t('添加订阅')}
-        </Button>
+        <Space>
+          <Button
+            icon={<IconPlus />}
+            theme="solid"
+            onClick={() => setShowAddModal(true)}
+          >
+            {t('添加订阅')}
+          </Button>
+          {hasExclusiveSubscription && (
+            <Button
+              icon={<IconLink />}
+              theme="light"
+              onClick={() => setShowExclusiveChannels(true)}
+            >
+              {t('管理专属渠道')}
+            </Button>
+          )}
+        </Space>
       </div>
 
       <Table
@@ -383,6 +426,14 @@ const ManageSubscriptionModal = ({ visible, onCancel, user, t, refresh }) => {
           </Form.Slot>
         </Form>
       </Modal>
+
+      {/* Exclusive Channels Manager */}
+      <UserExclusiveChannelManager
+        visible={showExclusiveChannels}
+        onClose={() => setShowExclusiveChannels(false)}
+        userId={user?.id}
+        userName={user?.username}
+      />
     </Spin>
   );
 

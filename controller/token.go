@@ -7,6 +7,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -149,6 +150,41 @@ func AddToken(c *gin.Context) {
 		})
 		return
 	}
+
+	userId := c.GetInt("id")
+
+	// 专属分组验证
+	if model.IsExclusiveGroup(token.Group) {
+		// 验证是否为本人的专属分组
+		expectedGroup := model.GetExclusiveGroupName(userId)
+		if token.Group != expectedGroup {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "只能使用自己的专属分组",
+			})
+			return
+		}
+
+		// 验证用户是否有启用专属分组的有效订阅
+		hasPermission, hasChannels, _ := service.GetUserExclusiveGroupStatus(userId)
+		if !hasPermission {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "需要有效订阅且启用专属分组功能",
+			})
+			return
+		}
+
+		// 验证专属分组是否已配置渠道
+		if !hasChannels {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "专属分组尚未配置渠道，请联系管理员",
+			})
+			return
+		}
+	}
+
 	key, err := common.GenerateKey()
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -159,7 +195,7 @@ func AddToken(c *gin.Context) {
 		return
 	}
 	cleanToken := model.Token{
-		UserId:             c.GetInt("id"),
+		UserId:             userId,
 		Name:               token.Name,
 		Key:                key,
 		CreatedTime:        common.GetTimestamp(),
