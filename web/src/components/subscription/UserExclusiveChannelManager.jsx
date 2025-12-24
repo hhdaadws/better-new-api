@@ -61,10 +61,11 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
         })).filter(c => c && c.id);
         setChannels(channelList);
       } else {
-        showError(res.data.message);
+        showError(res.data.message || t('获取失败'));
       }
     } catch (error) {
-      showError(t('获取专属渠道失败') + ': ' + error.message);
+      const errMsg = error.response?.data?.message || error.message || t('请求失败');
+      showError(t('获取专属渠道失败') + ': ' + errMsg);
     } finally {
       setLoading(false);
     }
@@ -80,10 +81,11 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
         const available = (res.data.data || []).filter(c => !existingIds.has(c.id));
         setAvailableChannels(available);
       } else {
-        showError(res.data.message);
+        showError(res.data.message || t('获取失败'));
       }
     } catch (error) {
-      showError(t('获取可用渠道失败') + ': ' + error.message);
+      const errMsg = error.response?.data?.message || error.message || t('请求失败');
+      showError(t('获取可用渠道失败') + ': ' + errMsg);
     }
   };
 
@@ -115,10 +117,11 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
         setSelectedChannelId(null);
         loadExclusiveChannels();
       } else {
-        showError(res.data.message);
+        showError(res.data.message || t('添加失败'));
       }
     } catch (error) {
-      showError(t('添加专属渠道失败') + ': ' + error.message);
+      const errMsg = error.response?.data?.message || error.message || t('请求失败');
+      showError(t('添加专属渠道失败') + ': ' + errMsg);
     } finally {
       setAdding(false);
     }
@@ -132,10 +135,11 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
         showSuccess(t('移除专属渠道成功'));
         loadExclusiveChannels();
       } else {
-        showError(res.data.message);
+        showError(res.data.message || t('移除失败'));
       }
     } catch (error) {
-      showError(t('移除专属渠道失败') + ': ' + error.message);
+      const errMsg = error.response?.data?.message || error.message || t('请求失败');
+      showError(t('移除专属渠道失败') + ': ' + errMsg);
     }
   };
 
