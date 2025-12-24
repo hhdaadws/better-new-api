@@ -53,7 +53,13 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
     try {
       const res = await API.get(`/api/subscription/exclusive/user/${userId}/channels`);
       if (res.data.success) {
-        setChannels(res.data.data || []);
+        // 提取渠道信息，添加 channel_id 用于后续操作
+        const channelList = (res.data.data || []).map(item => ({
+          ...item.channel_info,
+          _bindingId: item.id,
+          _channelId: item.channel_id,
+        })).filter(c => c && c.id);
+        setChannels(channelList);
       } else {
         showError(res.data.message);
       }

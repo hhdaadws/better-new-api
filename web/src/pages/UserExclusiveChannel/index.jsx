@@ -158,7 +158,7 @@ const UserExclusiveChannel = () => {
           {t('管理有专属分组权限的用户的专属渠道配置。只有订阅了启用专属分组的套餐的用户才会显示在此列表中。')}
         </Text>
 
-        {users.length > 0 ? (
+        {users.length > 0 || loading ? (
           <Table
             columns={columns}
             dataSource={users}
