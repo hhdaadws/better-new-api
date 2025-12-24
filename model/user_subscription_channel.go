@@ -255,7 +255,7 @@ type ExclusiveGroupUserInfo struct {
 	SubscriptionId  int    `json:"subscription_id"`
 	SubscriptionName string `json:"subscription_name"`
 	ChannelCount    int    `json:"channel_count"`
-	ExpiresTime     int64  `json:"expires_time"`
+	ExpiresTime     int64  `json:"expire_time"`
 }
 
 // GetUsersWithExclusiveGroup 获取所有有专属分组权限的用户
@@ -271,7 +271,7 @@ func GetUsersWithExclusiveGroup() ([]*ExclusiveGroupUserInfo, error) {
 			u.email,
 			s.id as subscription_id,
 			s.name as subscription_name,
-			us.expires_time,
+			us.expire_time as expires_time,
 			COALESCE(usc.channel_count, 0) as channel_count
 		FROM users u
 		INNER JOIN user_subscriptions us ON u.id = us.user_id
@@ -283,7 +283,7 @@ func GetUsersWithExclusiveGroup() ([]*ExclusiveGroupUserInfo, error) {
 		) usc ON u.id = usc.user_id
 		WHERE us.status = 1
 		AND s.enable_exclusive_group = true
-		AND (us.expires_time = 0 OR us.expires_time > ?)
+		AND (us.expire_time = 0 OR us.expire_time > ?)
 		ORDER BY u.id
 	`, common.GetTimestamp()).Scan(&results).Error
 

@@ -108,7 +108,7 @@ const UserExclusiveChannel = () => {
     },
     {
       title: t('到期时间'),
-      dataIndex: 'expires_time',
+      dataIndex: 'expire_time',
       width: 120,
       render: (time) => formatTime(time),
     },
