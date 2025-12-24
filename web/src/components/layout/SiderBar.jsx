@@ -45,6 +45,7 @@ const routerMap = {
   discount: '/console/discount',
   subscriptionPackages: '/console/subscription',
   subscriptionPageSetting: '/console/subscription-page-setting',
+  exclusiveChannel: '/console/exclusive-channel',
   about: '/about',
   detail: '/console',
   pricing: '/pricing',
