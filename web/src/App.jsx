@@ -53,6 +53,7 @@ import Setup from './pages/Setup';
 import SetupCheck from './components/layout/SetupCheck';
 import CheckinSetting from './pages/Checkin';
 import DiscountManagement from './pages/DiscountManagement';
+import UserExclusiveChannel from './pages/UserExclusiveChannel';
 
 const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -159,6 +160,14 @@ function App() {
           element={
             <AdminRoute>
               <SubscriptionPageSettingPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path='/console/exclusive-channel'
+          element={
+            <AdminRoute>
+              <UserExclusiveChannel />
             </AdminRoute>
           }
         />

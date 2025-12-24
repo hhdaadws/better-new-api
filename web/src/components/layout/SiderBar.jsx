@@ -219,6 +219,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
             itemKey: 'subscriptionPageSetting',
             to: '/console/subscription-page-setting',
           },
+          {
+            text: t('专属渠道'),
+            itemKey: 'exclusiveChannel',
+            to: '/console/exclusive-channel',
+          },
         ],
       },
     ];

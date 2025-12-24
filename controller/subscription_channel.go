@@ -177,6 +177,24 @@ func GetAvailableChannelsForExclusive(c *gin.Context) {
 	})
 }
 
+// GetUsersWithExclusiveGroup 获取有专属分组权限的用户列表
+func GetUsersWithExclusiveGroup(c *gin.Context) {
+	users, err := model.GetUsersWithExclusiveGroup()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    users,
+	})
+}
+
 // ========== 用户接口 ==========
 
 // GetUserExclusiveGroupStatus 获取当前用户的专属分组状态

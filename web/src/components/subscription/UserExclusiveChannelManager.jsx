@@ -51,7 +51,7 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
     if (!userId) return;
     setLoading(true);
     try {
-      const res = await API.get(`/api/subscription/user/${userId}/exclusive_channels`);
+      const res = await API.get(`/api/subscription/exclusive/user/${userId}/channels`);
       if (res.data.success) {
         setChannels(res.data.data || []);
       } else {
@@ -67,7 +67,7 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
   // Load available channels for binding
   const loadAvailableChannels = async () => {
     try {
-      const res = await API.get('/api/channel/available_for_exclusive');
+      const res = await API.get('/api/subscription/exclusive/available_channels');
       if (res.data.success) {
         // Filter out channels already bound to this user
         const existingIds = new Set(channels.map(c => c.id));
@@ -101,7 +101,7 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
     }
     setAdding(true);
     try {
-      const res = await API.post(`/api/subscription/user/${userId}/exclusive_channel`, {
+      const res = await API.post(`/api/subscription/exclusive/user/${userId}/channel`, {
         channel_id: selectedChannelId,
       });
       if (res.data.success) {
@@ -121,7 +121,7 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
   // Remove channel from user's exclusive group
   const handleRemoveChannel = async (channelId) => {
     try {
-      const res = await API.delete(`/api/subscription/user/${userId}/exclusive_channel/${channelId}`);
+      const res = await API.delete(`/api/subscription/exclusive/user/${userId}/channel/${channelId}`);
       if (res.data.success) {
         showSuccess(t('移除专属渠道成功'));
         loadExclusiveChannels();

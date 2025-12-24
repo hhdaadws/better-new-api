@@ -239,6 +239,7 @@ func SetApiRouter(router *gin.Engine) {
 				adminSubscriptionRoute.POST("/exclusive/user/:userId/channel", controller.AddUserExclusiveChannel)
 				adminSubscriptionRoute.DELETE("/exclusive/user/:userId/channel/:channelId", controller.RemoveUserExclusiveChannel)
 				adminSubscriptionRoute.GET("/exclusive/available_channels", controller.GetAvailableChannelsForExclusive)
+				adminSubscriptionRoute.GET("/exclusive/users", controller.GetUsersWithExclusiveGroup)
 			}
 
 			// User routes
