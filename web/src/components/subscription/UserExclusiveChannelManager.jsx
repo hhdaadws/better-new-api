@@ -225,12 +225,14 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
   ];
 
   const renderChannelOption = (item) => {
+    if (!item) return null;
     const icon = getChannelIcon(item.type);
+    const modelCount = item.models ? item.models.split(',').length : 0;
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {icon}
-        <span>{item.name}</span>
-        <Tag size="small" color="blue">{item.models?.split(',').length || 0} 模型</Tag>
+        <span>{item.name || '-'}</span>
+        <Tag size="small" color="blue">{modelCount} {t('模型')}</Tag>
       </div>
     );
   };
@@ -276,10 +278,27 @@ const UserExclusiveChannelManager = ({ visible, onClose, userId, userName }) => 
             optionList={availableChannels.map(c => ({
               value: c.id,
               label: c.name,
-              ...c,
+              type: c.type,
+              models: c.models,
             }))}
-            renderSelectedItem={(option) => option.label}
-            renderOptionItem={({ data }) => renderChannelOption(data)}
+            renderSelectedItem={(option) => option?.label || ''}
+            renderOptionItem={(renderProps) => {
+              const { disabled, selected, label, value, focused, onMouseEnter, onClick, ...rest } = renderProps;
+              const item = availableChannels.find(c => c.id === value);
+              return (
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    cursor: disabled ? 'not-allowed' : 'pointer',
+                    backgroundColor: selected ? 'var(--semi-color-primary-light-default)' : (focused ? 'var(--semi-color-fill-0)' : 'transparent'),
+                  }}
+                  onMouseEnter={onMouseEnter}
+                  onClick={onClick}
+                >
+                  {item ? renderChannelOption(item) : label}
+                </div>
+              );
+            }}
             filter
             showClear
           />
