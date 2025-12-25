@@ -64,6 +64,9 @@ type UserSubscription struct {
 	DailyQuotaUsed  int `json:"daily_quota_used" gorm:"-"`
 	WeeklyQuotaUsed int `json:"weekly_quota_used" gorm:"-"`
 	TotalQuotaUsed  int `json:"total_quota_used" gorm:"-"` // 总用量（订阅期内累计）
+	// 额度重置时间（不存数据库，用于 API 返回）
+	DailyExpiresAt  int64 `json:"daily_expires_at,omitempty" gorm:"-"`
+	WeeklyExpiresAt int64 `json:"weekly_expires_at,omitempty" gorm:"-"`
 }
 
 // SubscriptionLog 订阅额度使用日志

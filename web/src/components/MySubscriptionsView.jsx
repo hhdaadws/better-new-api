@@ -293,7 +293,9 @@ const MySubscriptionsView = () => {
                 color: 'var(--semi-color-text-2)'
               }}>
                 <div>• 每日额度在每天 00:00 自动重置</div>
-                <div>• 每周额度在每周一 00:00 自动重置</div>
+                <div>• 每周额度{sub.subscription_info.reset_from_redemption
+                  ? `将于 ${formatDate(sub.weekly_expires_at)} 自动重置`
+                  : '在每周一 00:00 自动重置'}</div>
                 <div>• 总额度在订阅期内不会重置</div>
               </div>
             </div>

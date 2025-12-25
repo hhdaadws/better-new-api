@@ -235,7 +235,7 @@ func GetMySubscriptions(c *gin.Context) {
 		return
 	}
 
-	// 从 Redis 读取用量数据
+	// 从 Redis 读取用量数据和过期时间
 	for _, sub := range subs {
 		if sub.SubscriptionInfo != nil {
 			quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo, sub.StartTime)
@@ -243,6 +243,12 @@ func GetMySubscriptions(c *gin.Context) {
 			sub.DailyQuotaUsed = dailyUsed
 			sub.WeeklyQuotaUsed = weeklyUsed
 			sub.TotalQuotaUsed = totalUsed
+			// 添加过期时间
+			status, _ := quotaRedis.GetQuotaStatus()
+			if status != nil {
+				sub.DailyExpiresAt = status.DailyExpiresAt
+				sub.WeeklyExpiresAt = status.WeeklyExpiresAt
+			}
 		}
 	}
 
@@ -329,7 +335,7 @@ func GetUserSubscriptions(c *gin.Context) {
 		return
 	}
 
-	// 从 Redis 读取用量数据
+	// 从 Redis 读取用量数据和过期时间
 	for _, sub := range subs {
 		if sub.SubscriptionInfo != nil {
 			quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo, sub.StartTime)
@@ -337,6 +343,12 @@ func GetUserSubscriptions(c *gin.Context) {
 			sub.DailyQuotaUsed = dailyUsed
 			sub.WeeklyQuotaUsed = weeklyUsed
 			sub.TotalQuotaUsed = totalUsed
+			// 添加过期时间
+			status, _ := quotaRedis.GetQuotaStatus()
+			if status != nil {
+				sub.DailyExpiresAt = status.DailyExpiresAt
+				sub.WeeklyExpiresAt = status.WeeklyExpiresAt
+			}
 		}
 	}
 
