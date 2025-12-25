@@ -69,17 +69,114 @@ func GetTTLForPeriod(period string) time.Duration {
 	}
 }
 
+// GetCurrentPeriodKeysWithStartTime 根据订阅配置返回当前周期键
+// 如果 ResetFromRedemption 为 true，周限额使用基于 StartTime 的周期
+// 日限额始终使用新加坡时间午夜
+func (s *SubscriptionQuotaRedis) GetCurrentPeriodKeysWithStartTime() (daily, weekly, total string) {
+	now := GetSingaporeNow()
+
+	// 日限额：始终使用新加坡日期
+	daily = now.Format("2006-01-02")
+
+	// 周限额：根据配置决定
+	if s.Subscription.ResetFromRedemption && s.StartTime > 0 {
+		// 基于兑换时间计算周期
+		weekly = s.getWeeklyPeriodKeyFromStartTime(now)
+	} else {
+		// 使用 ISO 周数
+		year, week := now.ISOWeek()
+		weekly = fmt.Sprintf("%d-W%02d", year, week)
+	}
+
+	// 总限额：固定值
+	total = "total"
+
+	return
+}
+
+// getWeeklyPeriodKeyFromStartTime 基于 StartTime 计算周期键
+// 格式：{userSubscriptionId}-P{periodNumber}
+// 每7天为一个周期，从 StartTime 开始计算
+func (s *SubscriptionQuotaRedis) getWeeklyPeriodKeyFromStartTime(now time.Time) string {
+	startTime := time.Unix(s.StartTime, 0).In(SingaporeLocation)
+
+	// 计算从 StartTime 到现在经过的天数
+	daysSinceStart := int(now.Sub(startTime).Hours() / 24)
+
+	// 计算当前是第几个周期（从0开始）
+	periodNumber := daysSinceStart / 7
+
+	// 使用订阅ID和周期号作为唯一键
+	return fmt.Sprintf("%d-P%d", s.UserSubscriptionId, periodNumber)
+}
+
+// GetTTLForPeriodWithStartTime 根据订阅配置返回 TTL
+// 如果 ResetFromRedemption 为 true，周限额 TTL 基于 StartTime 计算
+func (s *SubscriptionQuotaRedis) GetTTLForPeriodWithStartTime(period string) time.Duration {
+	now := GetSingaporeNow()
+
+	switch period {
+	case "daily":
+		// 日限额：始终到新加坡午夜
+		return GetTTLUntilSingaporeMidnight()
+
+	case "weekly":
+		if s.Subscription.ResetFromRedemption && s.StartTime > 0 {
+			// 基于兑换时间计算下一个周期开始时间
+			return s.getTTLUntilNextWeeklyPeriod(now)
+		}
+		// 使用原有逻辑：到下周一新加坡时间
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7 // Sunday = 7
+		}
+		daysToMonday := 8 - weekday
+		nextMonday := time.Date(now.Year(), now.Month(), now.Day()+daysToMonday, 0, 0, 0, 0, SingaporeLocation)
+		return nextMonday.Sub(now)
+
+	case "total":
+		return 365 * 24 * time.Hour
+
+	default:
+		return 24 * time.Hour
+	}
+}
+
+// getTTLUntilNextWeeklyPeriod 计算到下一个周期开始的 TTL
+func (s *SubscriptionQuotaRedis) getTTLUntilNextWeeklyPeriod(now time.Time) time.Duration {
+	startTime := time.Unix(s.StartTime, 0).In(SingaporeLocation)
+
+	// 计算从 StartTime 到现在经过的时间
+	elapsed := now.Sub(startTime)
+
+	// 计算当前周期已经过去了多少时间
+	weekDuration := 7 * 24 * time.Hour
+	elapsedInCurrentPeriod := elapsed % weekDuration
+
+	// 计算到下一个周期开始的时间
+	ttl := weekDuration - elapsedInCurrentPeriod
+
+	// 确保 TTL 至少为 1 分钟，避免边界情况
+	if ttl < time.Minute {
+		ttl = time.Minute
+	}
+
+	return ttl
+}
+
 // SubscriptionQuotaRedis handles Redis-based subscription quota operations
 type SubscriptionQuotaRedis struct {
 	UserSubscriptionId int
 	Subscription       *model.Subscription
+	StartTime          int64 // 用户订阅开始时间（Unix timestamp）
 }
 
 // NewSubscriptionQuotaRedis creates a new SubscriptionQuotaRedis instance
-func NewSubscriptionQuotaRedis(userSubscriptionId int, subscription *model.Subscription) *SubscriptionQuotaRedis {
+func NewSubscriptionQuotaRedis(userSubscriptionId int, subscription *model.Subscription, startTime int64) *SubscriptionQuotaRedis {
 	return &SubscriptionQuotaRedis{
 		UserSubscriptionId: userSubscriptionId,
 		Subscription:       subscription,
+		StartTime:          startTime,
 	}
 }
 
@@ -91,7 +188,7 @@ func (s *SubscriptionQuotaRedis) GetQuotaUsed() (int, int, int, error) {
 	}
 
 	ctx := context.Background()
-	daily, weekly, total := GetCurrentPeriodKeys()
+	daily, weekly, total := s.GetCurrentPeriodKeysWithStartTime()
 
 	// Get all quota values in parallel using pipeline
 	pipe := common.RDB.Pipeline()
@@ -155,7 +252,7 @@ func (s *SubscriptionQuotaRedis) ConsumeQuota(quota int) error {
 	}
 
 	ctx := context.Background()
-	daily, weekly, total := GetCurrentPeriodKeys()
+	daily, weekly, total := s.GetCurrentPeriodKeysWithStartTime()
 
 	// Use Lua script for atomic check-and-increment
 	// This ensures we don't exceed limits between check and consume
@@ -210,9 +307,9 @@ func (s *SubscriptionQuotaRedis) ConsumeQuota(quota int) error {
 	weeklyKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "weekly", weekly)
 	totalKey := GetSubscriptionQuotaKey(s.UserSubscriptionId, "total", total)
 
-	dailyTTL := int64(GetTTLForPeriod("daily").Seconds())
-	weeklyTTL := int64(GetTTLForPeriod("weekly").Seconds())
-	totalTTL := int64(GetTTLForPeriod("total").Seconds())
+	dailyTTL := int64(s.GetTTLForPeriodWithStartTime("daily").Seconds())
+	weeklyTTL := int64(s.GetTTLForPeriodWithStartTime("weekly").Seconds())
+	totalTTL := int64(s.GetTTLForPeriodWithStartTime("total").Seconds())
 
 	result, err := common.RDB.Eval(ctx, script,
 		[]string{dailyKey, weeklyKey, totalKey},
@@ -263,7 +360,7 @@ func (s *SubscriptionQuotaRedis) ReturnQuota(quota int) error {
 	}
 
 	ctx := context.Background()
-	daily, weekly, total := GetCurrentPeriodKeys()
+	daily, weekly, total := s.GetCurrentPeriodKeysWithStartTime()
 
 	// Use Lua script for atomic decrement with floor at 0
 	script := `
@@ -366,8 +463,8 @@ func (s *SubscriptionQuotaRedis) GetQuotaStatus() (*SubscriptionQuotaStatus, err
 	}
 
 	// Calculate expiration times
-	status.DailyExpiresAt = now.Add(GetTTLForPeriod("daily")).Unix()
-	status.WeeklyExpiresAt = now.Add(GetTTLForPeriod("weekly")).Unix()
+	status.DailyExpiresAt = now.Add(s.GetTTLForPeriodWithStartTime("daily")).Unix()
+	status.WeeklyExpiresAt = now.Add(s.GetTTLForPeriodWithStartTime("weekly")).Unix()
 
 	return status, nil
 }

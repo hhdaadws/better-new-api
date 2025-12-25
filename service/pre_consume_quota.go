@@ -163,7 +163,7 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 		}
 
 		// 获取订阅剩余额度
-		quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, sub)
+		quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, sub, userSub.StartTime)
 		dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 
 		// 计算各维度剩余额度
@@ -258,7 +258,7 @@ func PreConsumeQuota(c *gin.Context, preConsumedQuota int, relayInfo *relaycommo
 	subscriptionQuotaAvailable := 0 // 订阅可用额度
 	if userSub, sub, err := model.GetActiveUserSubscriptionNoGroup(relayInfo.UserId); err == nil && sub != nil {
 		// 获取订阅剩余额度（取日/周/总限额中最小的可用额度）
-		quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, sub)
+		quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, sub, userSub.StartTime)
 		dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 
 		// 计算各维度剩余额度

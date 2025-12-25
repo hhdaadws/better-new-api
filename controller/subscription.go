@@ -238,7 +238,7 @@ func GetMySubscriptions(c *gin.Context) {
 	// 从 Redis 读取用量数据
 	for _, sub := range subs {
 		if sub.SubscriptionInfo != nil {
-			quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo)
+			quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo, sub.StartTime)
 			dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 			sub.DailyQuotaUsed = dailyUsed
 			sub.WeeklyQuotaUsed = weeklyUsed
@@ -270,7 +270,7 @@ func GetMySubscriptionQuota(c *gin.Context) {
 	sub, _ := model.GetSubscriptionById(us.SubscriptionId)
 
 	// 从 Redis 读取用量
-	quotaRedis := service.NewSubscriptionQuotaRedis(us.Id, sub)
+	quotaRedis := service.NewSubscriptionQuotaRedis(us.Id, sub, us.StartTime)
 	dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 
 	data := map[string]interface{}{
@@ -332,7 +332,7 @@ func GetUserSubscriptions(c *gin.Context) {
 	// 从 Redis 读取用量数据
 	for _, sub := range subs {
 		if sub.SubscriptionInfo != nil {
-			quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo)
+			quotaRedis := service.NewSubscriptionQuotaRedis(sub.Id, sub.SubscriptionInfo, sub.StartTime)
 			dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 			sub.DailyQuotaUsed = dailyUsed
 			sub.WeeklyQuotaUsed = weeklyUsed
@@ -376,7 +376,7 @@ func AddUserSubscription(c *gin.Context) {
 
 	// 从 Redis 读取用量数据
 	if userSub.SubscriptionInfo != nil {
-		quotaRedis := service.NewSubscriptionQuotaRedis(userSub.Id, userSub.SubscriptionInfo)
+		quotaRedis := service.NewSubscriptionQuotaRedis(userSub.Id, userSub.SubscriptionInfo, userSub.StartTime)
 		dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 		userSub.DailyQuotaUsed = dailyUsed
 		userSub.WeeklyQuotaUsed = weeklyUsed
@@ -436,7 +436,7 @@ func UpdateUserSubscription(c *gin.Context) {
 
 	// 从 Redis 读取用量数据
 	if userSub.SubscriptionInfo != nil {
-		quotaRedis := service.NewSubscriptionQuotaRedis(userSub.Id, userSub.SubscriptionInfo)
+		quotaRedis := service.NewSubscriptionQuotaRedis(userSub.Id, userSub.SubscriptionInfo, userSub.StartTime)
 		dailyUsed, weeklyUsed, totalUsed, _ := quotaRedis.GetQuotaUsed()
 		userSub.DailyQuotaUsed = dailyUsed
 		userSub.WeeklyQuotaUsed = weeklyUsed

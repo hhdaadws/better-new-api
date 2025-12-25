@@ -96,6 +96,16 @@ const SubscriptionsTable = () => {
       ),
     },
     {
+      title: '周期重置',
+      dataIndex: 'reset_from_redemption',
+      width: 120,
+      render: (value) => (
+        <Tag color={value ? 'blue' : 'grey'}>
+          {value ? '从兑换开始' : '自然周'}
+        </Tag>
+      ),
+    },
+    {
       title: '操作',
       width: 280,
       fixed: 'right',
@@ -401,6 +411,12 @@ const SubscriptionsTable = () => {
             label="启用专属分组"
             initValue={false}
             extraText="启用后，管理员可为每个用户配置专属渠道，用户使用专属分组时仅消耗订阅额度"
+          />
+          <Form.Switch
+            field="reset_from_redemption"
+            label="周期从兑换开始"
+            initValue={false}
+            extraText="启用后，周限额从用户兑换时间开始计算，每7天重置一次（日限额仍按午夜重置）"
           />
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>

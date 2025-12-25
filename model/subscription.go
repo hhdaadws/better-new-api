@@ -40,6 +40,7 @@ type Subscription struct {
 	DurationDays         int    `json:"duration_days" gorm:"default:30"`
 	Status               int    `json:"status" gorm:"default:1"`
 	EnableExclusiveGroup bool   `json:"enable_exclusive_group" gorm:"default:false"` // 启用用户专属分组
+	ResetFromRedemption  bool   `json:"reset_from_redemption" gorm:"default:false"`  // 从兑换时间开始计算周期重置
 	CreatedTime          int64  `json:"created_time" gorm:"bigint"`
 	UpdatedTime          int64  `json:"updated_time" gorm:"bigint"`
 }

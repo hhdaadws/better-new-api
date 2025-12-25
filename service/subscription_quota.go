@@ -24,7 +24,7 @@ func TryConsumeSubscriptionQuota(relayInfo *relaycommon.RelayInfo, quota int) (b
 	}
 
 	// 使用 Redis 消费额度
-	quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, subscription)
+	quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, subscription, userSub.StartTime)
 	err = quotaRedis.ConsumeQuota(quota)
 	if err != nil {
 		// 订阅额度不足，返回 false，让系统降级到普通用户余额
@@ -62,7 +62,7 @@ func TryPreConsumeSubscriptionQuota(userId int, quota int) (bool, error) {
 	}
 
 	// 使用 Redis 预扣额度
-	quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, subscription)
+	quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, subscription, userSub.StartTime)
 	err = quotaRedis.ConsumeQuota(quota)
 	if err != nil {
 		// 订阅额度不足
@@ -91,6 +91,6 @@ func ReturnSubscriptionQuota(userId int, quota int) error {
 	}
 
 	// 使用 Redis 返还额度
-	quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, subscription)
+	quotaRedis := NewSubscriptionQuotaRedis(userSub.Id, subscription, userSub.StartTime)
 	return quotaRedis.ReturnQuota(quota)
 }
