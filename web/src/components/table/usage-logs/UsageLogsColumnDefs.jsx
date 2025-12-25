@@ -559,6 +559,7 @@ export const getLogsColumns = ({
               1.0,
               other?.is_system_prompt_overwritten,
               'claude',
+              other?.discount_ratio || 1,
             )
           : renderModelPriceSimple(
               other.model_ratio,
@@ -577,6 +578,7 @@ export const getLogsColumns = ({
               1.0,
               other?.is_system_prompt_overwritten,
               'openai',
+              other?.discount_ratio || 1,
             );
         return (
           <Typography.Paragraph

@@ -1111,6 +1111,7 @@ function renderPriceSimpleCore({
   image = false,
   imageRatio = 1.0,
   isSystemPromptOverride = false,
+  discountRatio = 1,
 }) {
   const { ratio: effectiveGroupRatio, label: ratioLabel } = getEffectiveRatio(
     groupRatio,
@@ -1171,9 +1172,9 @@ function renderPriceSimpleCore({
   parts.push(`{{ratioType}}: {{groupRatio}}`);
 
   // 检查是否有有效的用户优惠倍率
-  const hasUserGroupRatio = isValidGroupRatio(user_group_ratio);
-  if (hasUserGroupRatio) {
-    parts.push(i18next.t('优惠倍率: {{userGroupRatio}}'));
+  const hasDiscountRatio = discountRatio > 0 && discountRatio < 1;
+  if (hasDiscountRatio) {
+    parts.push(i18next.t('优惠倍率: {{discountRatio}}'));
   }
 
   let result = i18next.t(parts.join(' * '), {
@@ -1185,7 +1186,7 @@ function renderPriceSimpleCore({
     cacheCreationRatio5m: cacheCreationRatio5m,
     cacheCreationRatio1h: cacheCreationRatio1h,
     imageRatio: imageRatio,
-    userGroupRatio: user_group_ratio,
+    discountRatio: discountRatio,
   });
 
   if (isSystemPromptOverride) {
@@ -1552,6 +1553,7 @@ export function renderModelPriceSimple(
   imageRatio = 1.0,
   isSystemPromptOverride = false,
   provider = 'openai',
+  discountRatio = 1,
 ) {
   return renderPriceSimpleCore({
     modelRatio,
@@ -1569,6 +1571,7 @@ export function renderModelPriceSimple(
     image,
     imageRatio,
     isSystemPromptOverride,
+    discountRatio,
   });
 }
 
