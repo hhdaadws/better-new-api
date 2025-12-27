@@ -50,23 +50,28 @@ type User struct {
 	HiddenRatio      float64        `json:"hidden_ratio,omitempty" gorm:"type:decimal(10,4);default:1;column:hidden_ratio"`     // 隐藏计费倍率，仅超级管理员可见
 	DiscountRatio    float64        `json:"discount_ratio,omitempty" gorm:"type:decimal(10,4);default:1;column:discount_ratio"` // 优惠倍率，仅超级管理员可见，<=1
 	// 风控相关字段
-	RiskControlExempt     bool   `json:"risk_control_exempt" gorm:"default:false;column:risk_control_exempt"`           // 风控豁免
-	RiskControlBannedAt   int64  `json:"risk_control_banned_at" gorm:"default:0;column:risk_control_banned_at"`         // 风控封禁时间戳
-	RiskControlBannedInfo string `json:"risk_control_banned_info" gorm:"type:text;column:risk_control_banned_info"`     // 风控封禁详情JSON
+	RiskControlExempt     bool   `json:"risk_control_exempt" gorm:"default:false;column:risk_control_exempt"`       // 风控豁免
+	RiskControlBannedAt   int64  `json:"risk_control_banned_at" gorm:"default:0;column:risk_control_banned_at"`     // 风控封禁时间戳
+	RiskControlBannedInfo string `json:"risk_control_banned_info" gorm:"type:text;column:risk_control_banned_info"` // 风控封禁详情JSON
+	// 专属分组相关字段
+	EnableExclusiveGroup bool    `json:"enable_exclusive_group" gorm:"default:false;column:enable_exclusive_group"`                        // 启用专属分组
+	ExclusiveGroupRatio  float64 `json:"exclusive_group_ratio,omitempty" gorm:"type:decimal(10,4);default:1;column:exclusive_group_ratio"` // 专属分组倍率
 }
 
 func (user *User) ToBaseUser() *UserBase {
 	cache := &UserBase{
-		Id:                user.Id,
-		Group:             user.Group,
-		Quota:             user.Quota,
-		Status:            user.Status,
-		Username:          user.Username,
-		Setting:           user.Setting,
-		Email:             user.Email,
-		HiddenRatio:       user.HiddenRatio,
-		DiscountRatio:     user.DiscountRatio,
-		RiskControlExempt: user.RiskControlExempt,
+		Id:                   user.Id,
+		Group:                user.Group,
+		Quota:                user.Quota,
+		Status:               user.Status,
+		Username:             user.Username,
+		Setting:              user.Setting,
+		Email:                user.Email,
+		HiddenRatio:          user.HiddenRatio,
+		DiscountRatio:        user.DiscountRatio,
+		RiskControlExempt:    user.RiskControlExempt,
+		EnableExclusiveGroup: user.EnableExclusiveGroup,
+		ExclusiveGroupRatio:  user.ExclusiveGroupRatio,
 	}
 	return cache
 }
@@ -467,13 +472,15 @@ func (user *User) Edit(updatePassword bool) error {
 
 	newUser := *user
 	updates := map[string]interface{}{
-		"username":       newUser.Username,
-		"display_name":   newUser.DisplayName,
-		"group":          newUser.Group,
-		"quota":          newUser.Quota,
-		"remark":         newUser.Remark,
-		"hidden_ratio":   newUser.HiddenRatio,
-		"discount_ratio": newUser.DiscountRatio,
+		"username":               newUser.Username,
+		"display_name":           newUser.DisplayName,
+		"group":                  newUser.Group,
+		"quota":                  newUser.Quota,
+		"remark":                 newUser.Remark,
+		"hidden_ratio":           newUser.HiddenRatio,
+		"discount_ratio":         newUser.DiscountRatio,
+		"enable_exclusive_group": newUser.EnableExclusiveGroup,
+		"exclusive_group_ratio":  newUser.ExclusiveGroupRatio,
 	}
 	if updatePassword {
 		updates["password"] = newUser.Password

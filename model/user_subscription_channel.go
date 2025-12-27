@@ -248,44 +248,37 @@ func GetExclusiveGroupChannelIds(userId int) ([]int, error) {
 
 // ExclusiveGroupUserInfo 专属分组用户信息
 type ExclusiveGroupUserInfo struct {
-	UserId          int    `json:"user_id"`
-	Username        string `json:"username"`
-	DisplayName     string `json:"display_name"`
-	Email           string `json:"email"`
-	SubscriptionId  int    `json:"subscription_id"`
-	SubscriptionName string `json:"subscription_name"`
-	ChannelCount    int    `json:"channel_count"`
-	ExpiresTime     int64  `json:"expire_time"`
+	UserId              int     `json:"user_id"`
+	Username            string  `json:"username"`
+	DisplayName         string  `json:"display_name"`
+	Email               string  `json:"email"`
+	ExclusiveGroupRatio float64 `json:"exclusive_group_ratio"`
+	ChannelCount        int     `json:"channel_count"`
 }
 
-// GetUsersWithExclusiveGroup 获取所有有专属分组权限的用户
+// GetUsersWithExclusiveGroup 获取所有启用了专属分组的用户
 func GetUsersWithExclusiveGroup() ([]*ExclusiveGroupUserInfo, error) {
 	var results []*ExclusiveGroupUserInfo
 
-	// 查询有有效订阅且订阅套餐启用了专属分组的用户
+	// 查询启用了专属分组的用户
 	err := DB.Raw(`
 		SELECT
 			u.id as user_id,
 			u.username,
 			u.display_name,
 			u.email,
-			s.id as subscription_id,
-			s.name as subscription_name,
-			us.expire_time as expires_time,
+			u.exclusive_group_ratio,
 			COALESCE(usc.channel_count, 0) as channel_count
 		FROM users u
-		INNER JOIN user_subscriptions us ON u.id = us.user_id
-		INNER JOIN subscriptions s ON us.subscription_id = s.id
 		LEFT JOIN (
 			SELECT user_id, COUNT(*) as channel_count
 			FROM user_subscription_channels
 			GROUP BY user_id
 		) usc ON u.id = usc.user_id
-		WHERE us.status = 1
-		AND s.enable_exclusive_group = true
-		AND (us.expire_time = 0 OR us.expire_time > ?)
+		WHERE u.enable_exclusive_group = true
+		AND u.deleted_at IS NULL
 		ORDER BY u.id
-	`, common.GetTimestamp()).Scan(&results).Error
+	`).Scan(&results).Error
 
 	if err != nil {
 		return nil, err

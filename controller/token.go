@@ -165,12 +165,12 @@ func AddToken(c *gin.Context) {
 			return
 		}
 
-		// 验证用户是否有启用专属分组的有效订阅
-		hasPermission, hasChannels, _ := service.GetUserExclusiveGroupStatus(userId)
+		// 验证用户是否启用了专属分组
+		hasPermission, hasChannels, _, _ := service.GetUserExclusiveGroupStatus(userId)
 		if !hasPermission {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"message": "需要有效订阅且启用专属分组功能",
+				"message": "用户未启用专属分组功能",
 			})
 			return
 		}

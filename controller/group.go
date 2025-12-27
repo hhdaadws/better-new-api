@@ -46,11 +46,11 @@ func GetUserGroups(c *gin.Context) {
 	}
 
 	// 检查并添加专属分组
-	hasPermission, hasChannels, exclusiveGroupName := service.GetUserExclusiveGroupStatus(userId)
+	hasPermission, hasChannels, exclusiveGroupName, exclusiveRatio := service.GetUserExclusiveGroupStatus(userId)
 	if hasPermission {
 		usableGroups[exclusiveGroupName] = map[string]interface{}{
-			"ratio":        1.0, // 专属分组使用订阅额度，倍率为1
-			"desc":         "专属订阅分组",
+			"ratio":        exclusiveRatio, // 使用用户设置的专属分组倍率
+			"desc":         "专属分组",
 			"is_exclusive": true,
 			"has_channels": hasChannels,
 		}

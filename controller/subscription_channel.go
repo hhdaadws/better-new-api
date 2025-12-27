@@ -62,23 +62,29 @@ func AddUserExclusiveChannel(c *gin.Context) {
 		return
 	}
 
-	// 验证用户是否有有效订阅
-	userSub, sub, err := model.GetActiveUserSubscriptionNoGroup(userId)
-	if err != nil || sub == nil || userSub == nil {
+	// 验证用户是否启用了专属分组
+	userCache, err := model.GetUserCache(userId)
+	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "用户没有有效订阅",
+			"message": "用户不存在",
 		})
 		return
 	}
 
-	// 验证订阅是否启用专属分组
-	if !sub.EnableExclusiveGroup {
+	if !userCache.EnableExclusiveGroup {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": "当前订阅套餐未启用专属分组功能",
+			"message": "该用户未启用专属分组功能",
 		})
 		return
+	}
+
+	// 获取用户订阅（用于关联记录，如果有的话）
+	userSub, _, _ := model.GetActiveUserSubscriptionNoGroup(userId)
+	userSubId := 0
+	if userSub != nil {
+		userSubId = userSub.Id
 	}
 
 	// 验证渠道是否存在
@@ -105,7 +111,7 @@ func AddUserExclusiveChannel(c *gin.Context) {
 
 	// 创建绑定
 	usc := &model.UserSubscriptionChannel{
-		UserSubscriptionId: userSub.Id,
+		UserSubscriptionId: userSubId,
 		UserId:             userId,
 		ChannelId:          req.ChannelId,
 	}
@@ -201,7 +207,7 @@ func GetUsersWithExclusiveGroup(c *gin.Context) {
 func GetUserExclusiveGroupStatus(c *gin.Context) {
 	userId := c.GetInt("id")
 
-	hasPermission, hasChannels, groupName := service.GetUserExclusiveGroupStatus(userId)
+	hasPermission, hasChannels, groupName, groupRatio := service.GetUserExclusiveGroupStatus(userId)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -210,6 +216,7 @@ func GetUserExclusiveGroupStatus(c *gin.Context) {
 			"has_permission": hasPermission,
 			"has_channels":   hasChannels,
 			"group_name":     groupName,
+			"group_ratio":    groupRatio,
 		},
 	})
 }

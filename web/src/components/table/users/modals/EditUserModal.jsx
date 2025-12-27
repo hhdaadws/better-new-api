@@ -85,6 +85,8 @@ const EditUserModal = (props) => {
     remark: '',
     hidden_ratio: 1,
     discount_ratio: 1,
+    enable_exclusive_group: false,
+    exclusive_group_ratio: 1,
   });
 
   const fetchGroups = async () => {
@@ -342,6 +344,34 @@ const EditUserModal = (props) => {
                             max={1}
                             precision={4}
                             extraText={t('≤1，默认1表示无优惠。该倍率会在所有计费计算后应用')}
+                            style={{ width: '100%' }}
+                          />
+                        </Col>
+                      )}
+
+                      {/* 专属分组开关 - 仅超级管理员可见 */}
+                      {isRootUser && (
+                        <Col span={24}>
+                          <Form.Switch
+                            field='enable_exclusive_group'
+                            label={t('启用专属分组')}
+                            extraText={t('开启后用户可使用专属分组 (sub_user_' + userId + ')')}
+                          />
+                        </Col>
+                      )}
+
+                      {/* 专属分组倍率 - 仅超级管理员可见且启用专属分组时 */}
+                      {isRootUser && values.enable_exclusive_group && (
+                        <Col span={24}>
+                          <Form.InputNumber
+                            field='exclusive_group_ratio'
+                            label={t('专属分组倍率')}
+                            placeholder={t('专属分组的计费倍率')}
+                            step={0.01}
+                            min={0.01}
+                            max={10}
+                            precision={4}
+                            extraText={t('专属分组的模型价格倍率，默认1.0')}
                             style={{ width: '100%' }}
                           />
                         </Col>

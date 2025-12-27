@@ -15,16 +15,18 @@ import (
 
 // UserBase struct remains the same as it represents the cached data structure
 type UserBase struct {
-	Id                int     `json:"id"`
-	Group             string  `json:"group"`
-	Email             string  `json:"email"`
-	Quota             int     `json:"quota"`
-	Status            int     `json:"status"`
-	Username          string  `json:"username"`
-	Setting           string  `json:"setting"`
-	HiddenRatio       float64 `json:"hidden_ratio"`
-	DiscountRatio     float64 `json:"discount_ratio"`
-	RiskControlExempt bool    `json:"risk_control_exempt"`
+	Id                   int     `json:"id"`
+	Group                string  `json:"group"`
+	Email                string  `json:"email"`
+	Quota                int     `json:"quota"`
+	Status               int     `json:"status"`
+	Username             string  `json:"username"`
+	Setting              string  `json:"setting"`
+	HiddenRatio          float64 `json:"hidden_ratio"`
+	DiscountRatio        float64 `json:"discount_ratio"`
+	RiskControlExempt    bool    `json:"risk_control_exempt"`
+	EnableExclusiveGroup bool    `json:"enable_exclusive_group"`
+	ExclusiveGroupRatio  float64 `json:"exclusive_group_ratio"`
 }
 
 func (user *UserBase) WriteContext(c *gin.Context) {
@@ -105,15 +107,18 @@ func GetUserCache(userId int) (userCache *UserBase, err error) {
 
 	// Create cache object from user data
 	userCache = &UserBase{
-		Id:            user.Id,
-		Group:         user.Group,
-		Quota:         user.Quota,
-		Status:        user.Status,
-		Username:      user.Username,
-		Setting:       user.Setting,
-		Email:         user.Email,
-		HiddenRatio:   user.HiddenRatio,
-		DiscountRatio: user.DiscountRatio,
+		Id:                   user.Id,
+		Group:                user.Group,
+		Quota:                user.Quota,
+		Status:               user.Status,
+		Username:             user.Username,
+		Setting:              user.Setting,
+		Email:                user.Email,
+		HiddenRatio:          user.HiddenRatio,
+		DiscountRatio:        user.DiscountRatio,
+		RiskControlExempt:    user.RiskControlExempt,
+		EnableExclusiveGroup: user.EnableExclusiveGroup,
+		ExclusiveGroupRatio:  user.ExclusiveGroupRatio,
 	}
 
 	return userCache, nil

@@ -39,15 +39,15 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 
 // GetUserUsableGroupsWithExclusive 获取用户可用分组，包含专属分组
 // userGroup: 用户的分组
-// userId: 用户ID，用于检查是否有启用专属分组的有效订阅
+// userId: 用户ID，用于检查用户是否启用了专属分组
 func GetUserUsableGroupsWithExclusive(userGroup string, userId int) map[string]string {
 	groupsCopy := GetUserUsableGroups(userGroup)
 
-	// 检查用户是否有启用专属分组的有效订阅
+	// 检查用户是否启用了专属分组
 	if userId > 0 {
 		exclusiveGroup, hasExclusive := GetUserExclusiveGroup(userId)
 		if hasExclusive {
-			groupsCopy[exclusiveGroup] = "专属订阅分组"
+			groupsCopy[exclusiveGroup] = "专属分组"
 		}
 	}
 
@@ -55,29 +55,42 @@ func GetUserUsableGroupsWithExclusive(userGroup string, userId int) map[string]s
 }
 
 // GetUserExclusiveGroup 获取用户的专属分组名
-// 如果用户有启用专属分组的有效订阅，返回专属分组名和 true
+// 如果用户启用了专属分组，返回专属分组名和 true
 // 否则返回空字符串和 false
 func GetUserExclusiveGroup(userId int) (string, bool) {
-	userSub, sub, err := model.GetActiveUserSubscriptionNoGroup(userId)
-	if err != nil || sub == nil || userSub == nil {
+	userCache, err := model.GetUserCache(userId)
+	if err != nil {
 		return "", false
 	}
-	if !sub.EnableExclusiveGroup {
+	if !userCache.EnableExclusiveGroup {
 		return "", false
 	}
 	return model.GetExclusiveGroupName(userId), true
 }
 
+// GetUserExclusiveGroupRatio 获取用户的专属分组倍率
+func GetUserExclusiveGroupRatio(userId int) float64 {
+	userCache, err := model.GetUserCache(userId)
+	if err != nil {
+		return 1.0
+	}
+	if userCache.ExclusiveGroupRatio <= 0 {
+		return 1.0
+	}
+	return userCache.ExclusiveGroupRatio
+}
+
 // GetUserExclusiveGroupStatus 获取用户专属分组的状态信息
-// 返回：是否有专属分组权限、是否配置了渠道、专属分组名
-func GetUserExclusiveGroupStatus(userId int) (hasPermission bool, hasChannels bool, groupName string) {
+// 返回：是否有专属分组权限、是否配置了渠道、专属分组名、专属分组倍率
+func GetUserExclusiveGroupStatus(userId int) (hasPermission bool, hasChannels bool, groupName string, ratio float64) {
 	exclusiveGroup, hasExclusive := GetUserExclusiveGroup(userId)
 	if !hasExclusive {
-		return false, false, ""
+		return false, false, "", 1.0
 	}
 
 	hasChannels, _ = model.HasExclusiveGroupChannels(userId)
-	return true, hasChannels, exclusiveGroup
+	ratio = GetUserExclusiveGroupRatio(userId)
+	return true, hasChannels, exclusiveGroup, ratio
 }
 
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
