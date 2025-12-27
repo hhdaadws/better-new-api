@@ -103,6 +103,17 @@ const Dashboard = () => {
     }
   };
 
+  const handleTimeRangeChange = async (range) => {
+    dashboardData.handleTimeRangeChange(range);
+    // 延迟一下确保状态更新后再刷新
+    setTimeout(async () => {
+      const data = await dashboardData.loadQuotaData();
+      if (data && data.length > 0) {
+        dashboardCharts.updateChartData(data);
+      }
+    }, 0);
+  };
+
   const handleSearchConfirm = async () => {
     await dashboardData.handleSearchConfirm(dashboardCharts.updateChartData);
   };
@@ -157,8 +168,6 @@ const Dashboard = () => {
         isMobile={dashboardData.isMobile}
         isAdminUser={dashboardData.isAdminUser}
         inputs={dashboardData.inputs}
-        dataExportDefaultTime={dashboardData.dataExportDefaultTime}
-        timeOptions={dashboardData.timeOptions}
         handleInputChange={dashboardData.handleInputChange}
         t={dashboardData.t}
       />
@@ -187,6 +196,9 @@ const Dashboard = () => {
             CHART_CONFIG={CHART_CONFIG}
             FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
             hasApiInfoPanel={dashboardData.hasApiInfoPanel}
+            timeRange={dashboardData.timeRange}
+            timeRangeOptions={dashboardData.timeRangeOptions}
+            onTimeRangeChange={handleTimeRangeChange}
             t={dashboardData.t}
           />
 

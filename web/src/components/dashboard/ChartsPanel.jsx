@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Tabs, TabPane } from '@douyinfe/semi-ui';
+import { Card, Tabs, TabPane, ButtonGroup, Button } from '@douyinfe/semi-ui';
 import { PieChart } from 'lucide-react';
 import { VChart } from '@visactor/react-vchart';
 
@@ -33,6 +33,9 @@ const ChartsPanel = ({
   CHART_CONFIG,
   FLEX_CENTER_GAP2,
   hasApiInfoPanel,
+  timeRange,
+  timeRangeOptions,
+  onTimeRangeChange,
   t,
 }) => {
   return (
@@ -44,6 +47,17 @@ const ChartsPanel = ({
           <div className={FLEX_CENTER_GAP2}>
             <PieChart size={16} />
             {t('模型数据分析')}
+            <ButtonGroup size='small' className='ml-2'>
+              {timeRangeOptions.map((option) => (
+                <Button
+                  key={option.value}
+                  theme={timeRange === option.value ? 'solid' : 'light'}
+                  onClick={() => onTimeRangeChange(option.value)}
+                >
+                  {t(option.label)}
+                </Button>
+              ))}
+            </ButtonGroup>
           </div>
           <Tabs
             type='slash'

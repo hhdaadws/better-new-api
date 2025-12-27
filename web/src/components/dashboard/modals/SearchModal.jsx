@@ -27,8 +27,6 @@ const SearchModal = ({
   isMobile,
   isAdminUser,
   inputs,
-  dataExportDefaultTime,
-  timeOptions,
   handleInputChange,
   t,
 }) => {
@@ -73,17 +71,6 @@ const SearchModal = ({
           type: 'dateTime',
           name: 'end_timestamp',
           onChange: (value) => handleInputChange(value, 'end_timestamp'),
-        })}
-
-        {createFormField(Form.Select, {
-          field: 'data_export_default_time',
-          label: t('时间粒度'),
-          initValue: dataExportDefaultTime,
-          placeholder: t('时间粒度'),
-          name: 'data_export_default_time',
-          optionList: timeOptions,
-          onChange: (value) =>
-            handleInputChange(value, 'data_export_default_time'),
         })}
 
         {isAdminUser &&

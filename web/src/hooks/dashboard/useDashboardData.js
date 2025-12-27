@@ -22,7 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { API, isAdmin, showError, timestamp2string } from '../../helpers';
 import { getDefaultTime, getInitialTimestamp } from '../../helpers/dashboard';
-import { TIME_OPTIONS } from '../../constants/dashboard.constants';
+import { TIME_OPTIONS, TIME_RANGE_OPTIONS } from '../../constants/dashboard.constants';
 import { useIsMobile } from '../common/useIsMobile';
 import { useMinimumLoadingTime } from '../common/useMinimumLoadingTime';
 
@@ -51,6 +51,9 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
   const [dataExportDefaultTime, setDataExportDefaultTime] =
     useState(getDefaultTime());
+
+  // ========== 时间范围状态 ==========
+  const [timeRange, setTimeRange] = useState('24h');
 
   // ========== 数据状态 ==========
   const [quotaData, setQuotaData] = useState([]);
@@ -148,6 +151,21 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
       return;
     }
     setInputs((inputs) => ({ ...inputs, [name]: value }));
+  }, []);
+
+  const handleTimeRangeChange = useCallback((range) => {
+    setTimeRange(range);
+    const config = TIME_RANGE_OPTIONS.find((o) => o.value === range);
+    if (config) {
+      const now = Date.now() / 1000;
+      setInputs((prev) => ({
+        ...prev,
+        start_timestamp: timestamp2string(now - config.range),
+        end_timestamp: timestamp2string(now + 3600),
+      }));
+      setDataExportDefaultTime(config.granularity);
+      localStorage.setItem('data_export_default_time', config.granularity);
+    }
   }, []);
 
   const showSearchModal = useCallback(() => {
@@ -281,6 +299,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     // 输入状态
     inputs,
     dataExportDefaultTime,
+    timeRange,
 
     // 数据状态
     quotaData,
@@ -314,6 +333,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
     // 计算值
     timeOptions,
+    timeRangeOptions: TIME_RANGE_OPTIONS,
     performanceMetrics,
     getGreeting,
     isAdminUser,
@@ -326,6 +346,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
     // 函数
     handleInputChange,
+    handleTimeRangeChange,
     showSearchModal,
     handleCloseModal,
     loadQuotaData,

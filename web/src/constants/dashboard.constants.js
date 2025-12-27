@@ -43,6 +43,13 @@ export const TIME_OPTIONS = [
   { label: '周', value: 'week' },
 ];
 
+// ========== 时间范围选项 ==========
+export const TIME_RANGE_OPTIONS = [
+  { label: '24h', value: '24h', range: 86400, granularity: 'hour' },
+  { label: '周', value: 'week', range: 86400 * 7, granularity: 'day' },
+  { label: '月', value: 'month', range: 86400 * 30, granularity: 'week' },
+];
+
 export const DEFAULT_TIME_INTERVALS = {
   hour: { seconds: 3600, minutes: 60 },
   day: { seconds: 86400, minutes: 1440 },
