@@ -115,9 +115,11 @@ const EditUserModal = (props) => {
   };
 
   useEffect(() => {
-    loadUser();
-    if (userId) fetchGroups();
-  }, [props.editingUser.id]);
+    if (props.visible) {
+      loadUser();
+      if (userId) fetchGroups();
+    }
+  }, [props.editingUser.id, props.visible]);
 
   /* ----------------------- submit ----------------------- */
   const submit = async (values) => {
@@ -361,8 +363,8 @@ const EditUserModal = (props) => {
                       )}
 
                       {/* 专属分组倍率 - 仅超级管理员可见且启用专属分组时 */}
-                      {isRootUser && values.enable_exclusive_group && (
-                        <Col span={24}>
+                      {isRootUser && (
+                        <Col span={24} style={{ display: values.enable_exclusive_group ? 'block' : 'none' }}>
                           <Form.InputNumber
                             field='exclusive_group_ratio'
                             label={t('专属分组倍率')}
