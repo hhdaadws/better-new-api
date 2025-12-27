@@ -5,7 +5,9 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
@@ -28,6 +30,15 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) types.
 	if exists {
 		logger.LogDebug(ctx, fmt.Sprintf("final group: %s", autoGroup))
 		relayInfo.UsingGroup = autoGroup.(string)
+	}
+
+	// 检查是否为专属分组
+	if model.IsExclusiveGroup(relayInfo.UsingGroup) {
+		exclusiveRatio := service.GetUserExclusiveGroupRatio(relayInfo.UserId)
+		groupRatioInfo.GroupRatio = exclusiveRatio
+		groupRatioInfo.GroupSpecialRatio = exclusiveRatio
+		groupRatioInfo.HasSpecialRatio = true
+		return groupRatioInfo
 	}
 
 	// check user group special ratio
