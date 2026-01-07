@@ -51,6 +51,7 @@ export default function GeneralSettings(props) {
     'general_setting.custom_currency_exchange_rate': '',
     'general_setting.mask_error_message': false,
     'general_setting.hidden_ratio_threshold': 150000,
+    'general_setting.free_cache_creation_enabled': false,
     QuotaPerUnit: '',
     RetryTimes: '',
     USDExchangeRate: '',
@@ -309,6 +310,17 @@ export default function GeneralSettings(props) {
                   min={0}
                   max={500000}
                   onChange={handleFieldChange('general_setting.hidden_ratio_threshold')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'general_setting.free_cache_creation_enabled'}
+                  label={t('缓存创建免费')}
+                  extraText={t('粘性会话渠道升级时不计费缓存创建费用')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('general_setting.free_cache_creation_enabled')}
                 />
               </Col>
             </Row>

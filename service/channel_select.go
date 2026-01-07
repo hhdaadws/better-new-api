@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -57,7 +58,7 @@ func CacheGetRandomSatisfiedChannel(c *gin.Context, group string, modelName stri
 		isEligibleForFreeCache := strings.Contains(modelLower, "opus") ||
 			strings.Contains(modelLower, "sonnet")
 
-		if isEligibleForFreeCache && common.RedisEnabled {
+		if isEligibleForFreeCache && common.RedisEnabled && operation_setting.IsFreeCacheCreationEnabled() {
 			eligible, prevChannelId := common.CheckChannelSwitchForFreeCache(
 				selectGroup, modelName, sessionId,
 				channel.Id, channel.GetPriority())

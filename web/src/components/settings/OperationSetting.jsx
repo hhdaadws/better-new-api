@@ -49,6 +49,7 @@ const OperationSetting = () => {
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
     'general_setting.mask_error_message': false,
+    'general_setting.free_cache_creation_enabled': false,
 
     /* 顶栏模块管理 */
     HeaderNavModules: '',

@@ -24,6 +24,8 @@ type GeneralSetting struct {
 	MaskErrorMessage bool `json:"mask_error_message"`
 	// 隐藏倍率阈值：当缓存 tokens 超过此值时不应用隐藏倍率（默认 150000，即 150k）
 	HiddenRatioThreshold int `json:"hidden_ratio_threshold"`
+	// 是否启用缓存创建免费（粘性会话渠道切换时）
+	FreeCacheCreationEnabled bool `json:"free_cache_creation_enabled"`
 }
 
 // 默认配置
@@ -36,6 +38,7 @@ var generalSetting = GeneralSetting{
 	CustomCurrencyExchangeRate: 1.0,
 	MaskErrorMessage:           false,
 	HiddenRatioThreshold:       150000,
+	FreeCacheCreationEnabled:   false,
 }
 
 func init() {
@@ -107,4 +110,9 @@ func GetHiddenRatioThreshold() int {
 		return 150000 // 默认 150k
 	}
 	return generalSetting.HiddenRatioThreshold
+}
+
+// IsFreeCacheCreationEnabled 返回是否启用缓存创建免费功能
+func IsFreeCacheCreationEnabled() bool {
+	return generalSetting.FreeCacheCreationEnabled
 }
