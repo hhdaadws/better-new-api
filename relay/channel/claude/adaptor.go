@@ -56,11 +56,10 @@ func processClaudeTools(tools any) []any {
 		toolType, _ := toolMap["type"].(string)
 		// 检查是否是 web_search 工具（type 包含 web_search）
 		if strings.Contains(toolType, "web_search") {
-			// 创建新的 web_search 工具，确保 type 是 "web_search_20250305"
-			// 而不是其他格式
+			// 创建新的 web_search 工具，确保 type 是 "web_search"
 			webSearchTool := map[string]any{
-				"type": toolType,
-				"name": "web_search", // 确保 name 是 "web_search"
+				"type": "web_search",
+				"name": "web_search",
 			}
 			// 复制其他字段
 			if maxUses, exists := toolMap["max_uses"]; exists {
