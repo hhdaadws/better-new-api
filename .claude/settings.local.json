@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(go vet:*)",
+      "Bash(gofmt:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(git reset:*)",
+      "Bash(git -C \"e:/better-new-api\" branch --show-current)",
+      "Bash(git -C:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(cat:*)",
+      "Bash(find:*)",
+      "Bash(git merge:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)",
+      "Bash(git fetch:*)",
+      "Bash(git stash:*)",
+      "Bash(git pull:*)",
+      "Bash(git config:*)",
+      "Bash(cd /d e:better-new-api)",
+      "Bash(git -c http.proxy=http://127.0.0.1:7089 push origin alpha)",
+      "Bash(git -c http.proxy=http://127.0.0.1:7089 push origin alpha --force)",
+      "Bash(npm run build:*)",
+      "Bash(npx vite build)",
+      "Bash(node --check:*)",
+      "Bash(go test:*)",
+      "Bash(git ls-remote:*)",
+      "Bash(git remote add:*)"
+    ]
+  }
+}

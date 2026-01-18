@@ -116,6 +116,35 @@ func CommonClaudeHeadersOperation(c *gin.Context, req *http.Header, info *relayc
 		req.Set("anthropic-beta", anthropicBeta)
 	}
 	model_setting.GetClaudeSettings().WriteHeaders(info.OriginModelName, req)
+
+	// 检查请求体中是否包含 web_search 工具，如果有则确保 anthropic-beta 包含 web-search-2025-03-05
+	if claudeReq, ok := info.Request.(*dto.ClaudeRequest); ok && claudeReq != nil && claudeReq.Tools != nil {
+		if hasWebSearchTool(claudeReq.Tools) {
+			existingBeta := req.Get("anthropic-beta")
+			webSearchBeta := "web-search-2025-03-05"
+			if existingBeta == "" {
+				req.Set("anthropic-beta", webSearchBeta)
+			} else if !strings.Contains(existingBeta, webSearchBeta) {
+				req.Set("anthropic-beta", existingBeta+","+webSearchBeta)
+			}
+		}
+	}
+}
+
+// hasWebSearchTool 检查工具列表中是否包含 web_search 工具
+func hasWebSearchTool(tools any) bool {
+	toolsSlice, ok := tools.([]any)
+	if !ok {
+		return false
+	}
+	for _, tool := range toolsSlice {
+		if toolMap, ok := tool.(map[string]any); ok {
+			if toolType, ok := toolMap["type"].(string); ok && strings.Contains(toolType, "web_search") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SetupClaudeCodeTestHeaders 设置 Claude Code 测试请求头

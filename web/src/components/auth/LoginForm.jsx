@@ -59,6 +59,11 @@ import { SiDiscord }from 'react-icons/si';
 const LoginForm = () => {
   let navigate = useNavigate();
   const { t } = useTranslation();
+  const githubButtonTextKeyByState = {
+    idle: '使用 GitHub 继续',
+    redirecting: '正在跳转 GitHub...',
+    timeout: '请求超时，请刷新页面后重新发起 GitHub 登录',
+  };
   const [inputs, setInputs] = useState({
     username: '',
     password: '',
@@ -90,9 +95,10 @@ const LoginForm = () => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [hasUserAgreement, setHasUserAgreement] = useState(false);
   const [hasPrivacyPolicy, setHasPrivacyPolicy] = useState(false);
-  const [githubButtonText, setGithubButtonText] = useState('使用 GitHub 继续');
+  const [githubButtonState, setGithubButtonState] = useState('idle');
   const [githubButtonDisabled, setGithubButtonDisabled] = useState(false);
   const githubTimeoutRef = useRef(null);
+  const githubButtonText = t(githubButtonTextKeyByState[githubButtonState]);
 
   const logo = getLogo();
   const systemName = getSystemName();
@@ -284,17 +290,17 @@ const LoginForm = () => {
     }
     setGithubLoading(true);
     setGithubButtonDisabled(true);
-    setGithubButtonText(t('正在跳转 GitHub...'));
+    setGithubButtonState('redirecting');
     if (githubTimeoutRef.current) {
       clearTimeout(githubTimeoutRef.current);
     }
     githubTimeoutRef.current = setTimeout(() => {
       setGithubLoading(false);
-      setGithubButtonText(t('请求超时，请刷新页面后重新发起 GitHub 登录'));
+      setGithubButtonState('timeout');
       setGithubButtonDisabled(true);
     }, 20000);
     try {
-      onGitHubOAuthClicked(status.github_client_id);
+      onGitHubOAuthClicked(status.github_client_id, { shouldLogout: true });
     } finally {
       // 由于重定向，这里不会执行到，但为了完整性添加
       setTimeout(() => setGithubLoading(false), 3000);
@@ -309,7 +315,7 @@ const LoginForm = () => {
     }
     setDiscordLoading(true);
     try {
-      onDiscordOAuthClicked(status.discord_client_id);
+      onDiscordOAuthClicked(status.discord_client_id, { shouldLogout: true });
     } finally {
       // 由于重定向，这里不会执行到，但为了完整性添加
       setTimeout(() => setDiscordLoading(false), 3000);
@@ -324,7 +330,12 @@ const LoginForm = () => {
     }
     setOidcLoading(true);
     try {
-      onOIDCClicked(status.oidc_authorization_endpoint, status.oidc_client_id);
+      onOIDCClicked(
+        status.oidc_authorization_endpoint,
+        status.oidc_client_id,
+        false,
+        { shouldLogout: true },
+      );
     } finally {
       // 由于重定向，这里不会执行到，但为了完整性添加
       setTimeout(() => setOidcLoading(false), 3000);
@@ -339,7 +350,7 @@ const LoginForm = () => {
     }
     setLinuxdoLoading(true);
     try {
-      onLinuxDOOAuthClicked(status.linuxdo_client_id);
+      onLinuxDOOAuthClicked(status.linuxdo_client_id, { shouldLogout: true });
     } finally {
       // 由于重定向，这里不会执行到，但为了完整性添加
       setTimeout(() => setLinuxdoLoading(false), 3000);

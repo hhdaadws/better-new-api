@@ -57,6 +57,11 @@ import { SiDiscord } from 'react-icons/si';
 const RegisterForm = () => {
   let navigate = useNavigate();
   const { t } = useTranslation();
+  const githubButtonTextKeyByState = {
+    idle: '使用 GitHub 继续',
+    redirecting: '正在跳转 GitHub...',
+    timeout: '请求超时，请刷新页面后重新发起 GitHub 登录',
+  };
   const [inputs, setInputs] = useState({
     username: '',
     password: '',
@@ -88,9 +93,10 @@ const RegisterForm = () => {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [hasUserAgreement, setHasUserAgreement] = useState(false);
   const [hasPrivacyPolicy, setHasPrivacyPolicy] = useState(false);
-  const [githubButtonText, setGithubButtonText] = useState('使用 GitHub 继续');
+  const [githubButtonState, setGithubButtonState] = useState('idle');
   const [githubButtonDisabled, setGithubButtonDisabled] = useState(false);
   const githubTimeoutRef = useRef(null);
+  const githubButtonText = t(githubButtonTextKeyByState[githubButtonState]);
 
   const logo = getLogo();
   const systemName = getSystemName();
@@ -251,17 +257,17 @@ const RegisterForm = () => {
     }
     setGithubLoading(true);
     setGithubButtonDisabled(true);
-    setGithubButtonText(t('正在跳转 GitHub...'));
+    setGithubButtonState('redirecting');
     if (githubTimeoutRef.current) {
       clearTimeout(githubTimeoutRef.current);
     }
     githubTimeoutRef.current = setTimeout(() => {
       setGithubLoading(false);
-      setGithubButtonText(t('请求超时，请刷新页面后重新发起 GitHub 登录'));
+      setGithubButtonState('timeout');
       setGithubButtonDisabled(true);
     }, 20000);
     try {
-      onGitHubOAuthClicked(status.github_client_id);
+      onGitHubOAuthClicked(status.github_client_id, { shouldLogout: true });
     } finally {
       setTimeout(() => setGithubLoading(false), 3000);
     }
@@ -270,7 +276,7 @@ const RegisterForm = () => {
   const handleDiscordClick = () => {
     setDiscordLoading(true);
     try {
-      onDiscordOAuthClicked(status.discord_client_id);
+      onDiscordOAuthClicked(status.discord_client_id, { shouldLogout: true });
     } finally {
       setTimeout(() => setDiscordLoading(false), 3000);
     }
@@ -279,7 +285,12 @@ const RegisterForm = () => {
   const handleOIDCClick = () => {
     setOidcLoading(true);
     try {
-      onOIDCClicked(status.oidc_authorization_endpoint, status.oidc_client_id);
+      onOIDCClicked(
+        status.oidc_authorization_endpoint,
+        status.oidc_client_id,
+        false,
+        { shouldLogout: true },
+      );
     } finally {
       setTimeout(() => setOidcLoading(false), 3000);
     }
@@ -288,7 +299,7 @@ const RegisterForm = () => {
   const handleLinuxDOClick = () => {
     setLinuxdoLoading(true);
     try {
-      onLinuxDOOAuthClicked(status.linuxdo_client_id);
+      onLinuxDOOAuthClicked(status.linuxdo_client_id, { shouldLogout: true });
     } finally {
       setTimeout(() => setLinuxdoLoading(false), 3000);
     }

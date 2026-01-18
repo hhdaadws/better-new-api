@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -13,10 +14,11 @@ import (
 const MaskedErrorMessage = "Internal Server Error"
 
 type OpenAIError struct {
-	Message string `json:"message"`
-	Type    string `json:"type"`
-	Param   string `json:"param"`
-	Code    any    `json:"code"`
+	Message  string          `json:"message"`
+	Type     string          `json:"type"`
+	Param    string          `json:"param"`
+	Code     any             `json:"code"`
+	Metadata json.RawMessage `json:"metadata,omitempty"`
 }
 
 type ClaudeError struct {
@@ -98,6 +100,15 @@ type NewAPIError struct {
 	errorType      ErrorType
 	errorCode      ErrorCode
 	StatusCode     int
+	Metadata       json.RawMessage
+}
+
+// Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.
+func (e *NewAPIError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
 }
 
 func (e *NewAPIError) GetErrorCode() ErrorCode {
@@ -125,6 +136,20 @@ func (e *NewAPIError) Error() string {
 	return e.Err.Error()
 }
 
+func (e *NewAPIError) ErrorWithStatusCode() string {
+	if e == nil {
+		return ""
+	}
+	msg := e.Error()
+	if e.StatusCode == 0 {
+		return msg
+	}
+	if msg == "" {
+		return fmt.Sprintf("status_code=%d", e.StatusCode)
+	}
+	return fmt.Sprintf("status_code=%d, %s", e.StatusCode, msg)
+}
+
 func (e *NewAPIError) MaskSensitiveError() string {
 	if e == nil {
 		return ""
@@ -137,6 +162,20 @@ func (e *NewAPIError) MaskSensitiveError() string {
 		return errStr
 	}
 	return common.MaskSensitiveInfo(errStr)
+}
+
+func (e *NewAPIError) MaskSensitiveErrorWithStatusCode() string {
+	if e == nil {
+		return ""
+	}
+	msg := e.MaskSensitiveError()
+	if e.StatusCode == 0 {
+		return msg
+	}
+	if msg == "" {
+		return fmt.Sprintf("status_code=%d", e.StatusCode)
+	}
+	return fmt.Sprintf("status_code=%d, %s", e.StatusCode, msg)
 }
 
 func (e *NewAPIError) SetMessage(message string) {
@@ -306,6 +345,13 @@ func WithOpenAIError(openAIError OpenAIError, statusCode int, ops ...NewAPIError
 		StatusCode: statusCode,
 		Err:        errors.New(openAIError.Message),
 		errorCode:  ErrorCode(code),
+	}
+	// OpenRouter
+	if len(openAIError.Metadata) > 0 {
+		openAIError.Message = fmt.Sprintf("%s (%s)", openAIError.Message, openAIError.Metadata)
+		e.Metadata = openAIError.Metadata
+		e.RelayError = openAIError
+		e.Err = errors.New(openAIError.Message)
 	}
 	for _, op := range ops {
 		op(e)

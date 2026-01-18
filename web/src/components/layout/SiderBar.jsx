@@ -51,6 +51,7 @@ const routerMap = {
   pricing: '/pricing',
   task: '/console/task',
   models: '/console/models',
+  deployment: '/console/deployment',
   playground: '/console/playground',
   personal: '/console/personal',
   mySubscription: '/console/my-subscription',
@@ -167,6 +168,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('模型管理'),
         itemKey: 'models',
         to: '/console/models',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('模型部署'),
+        itemKey: 'deployment',
+        to: '/deployment',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
@@ -429,7 +436,6 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       className='sidebar-container'
       style={{
         width: 'var(--sidebar-current-width)',
-        background: 'var(--semi-color-bg-0)',
       }}
     >
       <SkeletonWrapper

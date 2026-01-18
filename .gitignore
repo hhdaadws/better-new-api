@@ -17,8 +17,10 @@ new-api
 tiktoken_cache
 .eslintcache
 .gocache
+.gomodcache/
 .cache
 web/bun.lock
+plans
 
 electron/node_modules
 electron/dist
@@ -36,3 +38,7 @@ backups/
 
 # Claude knowledge file
 CLAUDE.md
+
+# Go module cache (from QuantumNous)
+.gocache-temp
+.gopath
