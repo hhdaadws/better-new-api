@@ -101,7 +101,7 @@ func RequestOpenAI2ClaudeMessage(c *gin.Context, textRequest dto.GeneralOpenAIRe
 	// https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/web-search-tool
 	if textRequest.WebSearchOptions != nil {
 		webSearchTool := dto.ClaudeWebSearchTool{
-			Type: "web_search_20250305",
+			Type: "web_search",
 			Name: "web_search",
 		}
 
