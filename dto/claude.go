@@ -399,6 +399,53 @@ func ProcessTools(tools []any) ([]*Tool, []*ClaudeWebSearchTool) {
 			normalTools = append(normalTools, &t)
 		case ClaudeWebSearchTool:
 			webSearchTools = append(webSearchTools, &t)
+		case map[string]interface{}:
+			// 处理从 JSON 反序列化得到的 map 类型
+			toolType, _ := t["type"].(string)
+			if strings.Contains(toolType, "web_search") {
+				// 转换为 ClaudeWebSearchTool
+				webTool := &ClaudeWebSearchTool{
+					Type: toolType,
+				}
+				if name, ok := t["name"].(string); ok {
+					webTool.Name = name
+				}
+				if maxUses, ok := t["max_uses"].(float64); ok {
+					webTool.MaxUses = int(maxUses)
+				}
+				if userLoc, ok := t["user_location"].(map[string]interface{}); ok {
+					webTool.UserLocation = &ClaudeWebSearchUserLocation{}
+					if locType, ok := userLoc["type"].(string); ok {
+						webTool.UserLocation.Type = locType
+					}
+					if timezone, ok := userLoc["timezone"].(string); ok {
+						webTool.UserLocation.Timezone = timezone
+					}
+					if country, ok := userLoc["country"].(string); ok {
+						webTool.UserLocation.Country = country
+					}
+					if region, ok := userLoc["region"].(string); ok {
+						webTool.UserLocation.Region = region
+					}
+					if city, ok := userLoc["city"].(string); ok {
+						webTool.UserLocation.City = city
+					}
+				}
+				webSearchTools = append(webSearchTools, webTool)
+			} else {
+				// 转换为普通 Tool
+				normalTool := &Tool{}
+				if name, ok := t["name"].(string); ok {
+					normalTool.Name = name
+				}
+				if desc, ok := t["description"].(string); ok {
+					normalTool.Description = desc
+				}
+				if schema, ok := t["input_schema"].(map[string]interface{}); ok {
+					normalTool.InputSchema = schema
+				}
+				normalTools = append(normalTools, normalTool)
+			}
 		default:
 			// 未知类型，跳过
 			continue
