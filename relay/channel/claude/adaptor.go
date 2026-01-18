@@ -31,7 +31,51 @@ func (a *Adaptor) ConvertGeminiRequest(*gin.Context, *relaycommon.RelayInfo, *dt
 }
 
 func (a *Adaptor) ConvertClaudeRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.ClaudeRequest) (any, error) {
+	// 处理 tools 字段，确保 web_search 工具格式正确
+	if request.Tools != nil {
+		request.Tools = processClaudeTools(request.Tools)
+	}
 	return request, nil
+}
+
+// processClaudeTools 处理工具列表，确保 web_search 工具的 type 字段正确
+func processClaudeTools(tools any) []any {
+	toolsSlice, ok := tools.([]any)
+	if !ok {
+		return nil
+	}
+
+	result := make([]any, 0, len(toolsSlice))
+	for _, tool := range toolsSlice {
+		toolMap, ok := tool.(map[string]any)
+		if !ok {
+			result = append(result, tool)
+			continue
+		}
+
+		toolType, _ := toolMap["type"].(string)
+		// 检查是否是 web_search 工具（type 包含 web_search）
+		if strings.Contains(toolType, "web_search") {
+			// 创建新的 web_search 工具，确保 type 是 "web_search_20250305"
+			// 而不是其他格式
+			webSearchTool := map[string]any{
+				"type": toolType,
+				"name": "web_search", // 确保 name 是 "web_search"
+			}
+			// 复制其他字段
+			if maxUses, exists := toolMap["max_uses"]; exists {
+				webSearchTool["max_uses"] = maxUses
+			}
+			if userLocation, exists := toolMap["user_location"]; exists {
+				webSearchTool["user_location"] = userLocation
+			}
+			result = append(result, webSearchTool)
+		} else {
+			// 普通工具，直接保留
+			result = append(result, tool)
+		}
+	}
+	return result
 }
 
 func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.AudioRequest) (io.Reader, error) {
