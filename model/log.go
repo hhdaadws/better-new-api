@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -54,11 +55,28 @@ const (
 func formatUserLogs(logs []*Log) {
 	for i := range logs {
 		logs[i].ChannelName = ""
+
+		// 对错误日志进行伪装处理（当启用了错误伪装设置时）
+		if logs[i].Type == LogTypeError && operation_setting.ShouldMaskErrorMessage() {
+			logs[i].Content = types.MaskedErrorMessage
+		}
+
 		var otherMap map[string]interface{}
 		otherMap, _ = common.StrToMap(logs[i].Other)
 		if otherMap != nil {
-			// delete admin
+			// delete admin info
 			delete(otherMap, "admin_info")
+
+			// 对错误日志隐藏敏感的错误详情（当启用了错误伪装设置时）
+			if logs[i].Type == LogTypeError && operation_setting.ShouldMaskErrorMessage() {
+				delete(otherMap, "error_code")
+				delete(otherMap, "error_type")
+				delete(otherMap, "request_body")
+				delete(otherMap, "request_headers")
+				delete(otherMap, "channel_name")
+				delete(otherMap, "channel_type")
+				delete(otherMap, "channel_id")
+			}
 		}
 		logs[i].Other = common.MapToJsonStr(otherMap)
 		logs[i].Id = logs[i].Id % 1024
