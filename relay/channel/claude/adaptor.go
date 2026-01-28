@@ -169,6 +169,8 @@ func SetupClaudeCodeStandardHeaders(c *gin.Context, req *http.Header) {
 	// 4. 其他必要头
 	req.Set("accept-language", "*")
 	req.Set("sec-fetch-mode", "cors")
+	req.Set("Accept-Encoding", "gzip, br")
+	req.Set("Connection", "keep-alive")
 }
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
