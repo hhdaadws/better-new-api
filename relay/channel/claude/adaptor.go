@@ -169,7 +169,7 @@ func SetupClaudeCodeStandardHeaders(c *gin.Context, req *http.Header) {
 	// 4. 其他必要头
 	req.Set("accept-language", "*")
 	req.Set("sec-fetch-mode", "cors")
-	req.Set("Accept-Encoding", "gzip, br")
+	// 注意：不设置 Accept-Encoding，让 Go HTTP 客户端自动处理压缩/解压
 	req.Set("Connection", "keep-alive")
 }
 
