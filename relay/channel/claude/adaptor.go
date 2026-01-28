@@ -138,15 +138,11 @@ func SetupClaudeCodeTestHeaders(req *http.Header) {
 }
 
 // SetupClaudeCodeStandardHeaders 注入标准 Claude Code 请求头
-// 保留客户端的必要参数，替换/补充其他参数
+// 使用固定的标准值，确保请求不被 CRS 拦截
 func SetupClaudeCodeStandardHeaders(c *gin.Context, req *http.Header) {
-	// 1. 从客户端保留的参数（如果存在）
-	// anthropic-beta: 保留客户端的值（可能包含特定功能）
-	if beta := c.Request.Header.Get("anthropic-beta"); beta != "" {
-		req.Set("anthropic-beta", beta)
-	} else {
-		req.Set("anthropic-beta", "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14")
-	}
+	// 1. anthropic-beta: 强制使用标准值（必须包含 oauth-2025-04-20）
+	// 客户端可能缺少 oauth-2025-04-20，导致被 CRS 拦截
+	req.Set("anthropic-beta", "oauth-2025-04-20,claude-code-20250219,interleaved-thinking-2025-05-14")
 
 	// anthropic-version: 保留客户端的值
 	if version := c.Request.Header.Get("anthropic-version"); version != "" {
