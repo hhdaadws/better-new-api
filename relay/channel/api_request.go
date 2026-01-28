@@ -39,24 +39,38 @@ func SetupApiRequestHeader(info *common.RelayInfo, c *gin.Context, req *http.Hea
 
 		// 如果启用了透传扩展请求头
 		if info.ChannelOtherSettings.PassThroughHeaders {
-			// 使用白名单模式，只透传特定的扩展请求头
+			// 使用白名单模式，与 CRS filterForClaude() 保持一致
+			// 允许的请求头列表（参考 CRS src/utils/headerFilter.js）
+			allowedHeaders := map[string]bool{
+				"accept":          true,
+				"accept-language": true,
+				"accept-encoding": true,
+				"user-agent":      true,
+				"content-type":    true,
+				"connection":      true,
+				"x-app":           true,
+				"sec-fetch-mode":  true,
+				// anthropic-* 前缀单独处理
+				// x-stainless-* 前缀单独处理
+			}
+
 			for key, values := range c.Request.Header {
 				lowerKey := strings.ToLower(key)
 
-				// 透传规则（白名单）：
-				// 1. anthropic-* 前缀的所有头（如 anthropic-version, anthropic-beta）
-				// 2. 特定的 x-* 头：x-app（应用标识）
-				// 3. User-Agent（用户代理，用于统计）
 				shouldPassThrough := false
 
+				// 1. 检查是否在白名单中
+				if allowedHeaders[lowerKey] {
+					shouldPassThrough = true
+				}
+
+				// 2. anthropic-* 前缀的所有头（API版本、Beta功能等）
 				if strings.HasPrefix(lowerKey, "anthropic-") {
-					// anthropic-* 前缀的头（API版本、Beta功能等）
 					shouldPassThrough = true
-				} else if lowerKey == "x-app" {
-					// 应用标识头
-					shouldPassThrough = true
-				} else if lowerKey == "user-agent" {
-					// 用户代理
+				}
+
+				// 3. x-stainless-* 前缀的所有头（Claude SDK 指纹头）
+				if strings.HasPrefix(lowerKey, "x-stainless-") {
 					shouldPassThrough = true
 				}
 
