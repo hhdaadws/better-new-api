@@ -214,6 +214,8 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 
 		if newAPIError == nil {
+			// 超级管理员的所有请求都记录到错误日志（用于调试）
+			recordSuperAdminRequest(c)
 			return
 		}
 
@@ -407,6 +409,85 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveError(), tokenId, 0, false, userGroup, other)
 	}
 
+}
+
+// recordSuperAdminRequest 记录超级管理员的所有请求到错误日志（用于调试）
+func recordSuperAdminRequest(c *gin.Context) {
+	userId := c.GetInt("id")
+	// 检查是否是超级管理员
+	if !model.IsRootUser(userId) {
+		return
+	}
+
+	tokenName := c.GetString("token_name")
+	modelName := c.GetString("original_model")
+	tokenId := c.GetInt("token_id")
+	userGroup := c.GetString("group")
+	channelId := c.GetInt("channel_id")
+
+	other := make(map[string]interface{})
+	other["debug_log"] = true // 标记这是调试日志，不是真正的错误
+	if c.Request != nil && c.Request.URL != nil {
+		other["request_path"] = c.Request.URL.Path
+		other["request_method"] = c.Request.Method
+	}
+	other["channel_id"] = channelId
+	other["channel_name"] = c.GetString("channel_name")
+	other["channel_type"] = c.GetInt("channel_type")
+
+	// 记录请求头（遮蔽敏感信息）
+	if c.Request != nil {
+		maskedHeaders := make(map[string]string)
+		sensitiveHeaders := map[string]bool{
+			"Authorization":       true,
+			"X-Api-Key":           true,
+			"Api-Key":             true,
+			"X-Auth-Token":        true,
+			"Cookie":              true,
+			"X-Custom-Auth":       true,
+			"Proxy-Authorization": true,
+		}
+		for key, values := range c.Request.Header {
+			if len(values) > 0 {
+				if sensitiveHeaders[key] {
+					// 遮蔽敏感头部，只显示前10个和后4个字符
+					val := values[0]
+					if len(val) > 20 {
+						maskedHeaders[key] = val[:10] + "****" + val[len(val)-4:]
+					} else if len(val) > 8 {
+						maskedHeaders[key] = val[:4] + "****" + val[len(val)-2:]
+					} else {
+						maskedHeaders[key] = "****"
+					}
+				} else {
+					maskedHeaders[key] = values[0]
+				}
+			}
+		}
+		other["request_headers"] = maskedHeaders
+	}
+
+	// 记录请求体（限制大小）
+	if requestBody, err := common.GetRequestBody(c); err == nil && len(requestBody) > 0 {
+		const maxBodySize = 4096 // 限制为4KB
+		bodyStr := string(requestBody)
+		if len(bodyStr) > maxBodySize {
+			bodyStr = bodyStr[:maxBodySize] + "...[truncated]"
+		}
+		other["request_body"] = bodyStr
+	}
+
+	adminInfo := make(map[string]interface{})
+	adminInfo["use_channel"] = c.GetStringSlice("use_channel")
+	isMultiKey := common.GetContextKeyBool(c, constant.ContextKeyChannelIsMultiKey)
+	if isMultiKey {
+		adminInfo["is_multi_key"] = true
+		adminInfo["multi_key_index"] = common.GetContextKeyInt(c, constant.ContextKeyChannelMultiKeyIndex)
+	}
+	other["admin_info"] = adminInfo
+
+	// 记录到错误日志，内容标记为调试日志
+	model.RecordErrorLog(c, userId, channelId, modelName, tokenName, "[SUPER_ADMIN_DEBUG] Request successful", tokenId, 0, false, userGroup, other)
 }
 
 func RelayMidjourney(c *gin.Context) {
